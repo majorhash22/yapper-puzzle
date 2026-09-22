@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#111827" />
+  <title>Yappers Puzzle</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">DAILY REBUS CHALLENGE</div>
+        <h1>Yappers Puzzle</h1>
+      </div>
+      <div class="today-pill" id="todayPill">5 puzzles daily</div>
+    </header>
+
+    <section id="joinView" class="card join-card">
+      <div class="badge">⚡ Speed matters</div>
+      <h2>Five puzzles. One daily score.</h2>
+      <p>Solve each rebus as fast as you can. You must solve it or <strong>Give Up</strong> before moving on. Giving up scores 0.</p>
+      <form id="joinForm" class="join-form">
+        <label for="displayName">Player name</label>
+        <div class="row">
+          <input id="displayName" maxlength="24" placeholder="Enter your name" autocomplete="nickname" required />
+          <button type="submit" class="primary">Play today</button>
+        </div>
+        <p class="form-error" id="joinError"></p>
+      </form>
+    </section>
+
+    <section id="gameView" class="game-grid hidden">
+      <div class="main-column">
+        <div class="status-row">
+          <div><span class="muted">Player</span><strong id="playerName"></strong></div>
+          <div><span class="muted">Daily score</span><strong id="totalScore">0</strong></div>
+          <div><span class="muted">Progress</span><strong id="progress">0 / 5</strong></div>
+        </div>
+
+        <div id="puzzleCard" class="card puzzle-card">
+          <div class="puzzle-head">
+            <div>
+              <span class="muted" id="puzzleNumber">Puzzle 1 of 5</span>
+              <h2>What phrase does this represent?</h2>
+            </div>
+          </div>
+
+          <div id="puzzleVisual" class="puzzle-visual" aria-label="Rebus puzzle"></div>
+
+          <form id="answerForm" class="answer-form">
+            <input id="answerInput" autocomplete="off" placeholder="Type your answer…" required />
+            <button class="primary" type="submit">Submit</button>
+          </form>
+          <div class="action-row">
+            <p id="answerMessage" class="message" aria-live="polite"></p>
+            <button id="giveUpButton" class="danger-ghost" type="button">Give Up</button>
+          </div>
+        </div>
+
+        <div id="resultBanner" class="result-banner hidden" aria-live="polite"></div>
+
+        <div id="finishedCard" class="card finished-card hidden">
+          <div class="trophy">🏁</div>
+          <h2>You finished today’s five!</h2>
+          <p>Your final score is <strong id="finalScore">0</strong>.</p>
+          <div id="dailyBreakdown" class="breakdown"></div>
+          <p class="muted">Come back after the daily reset for five new rebus puzzles.</p>
+        </div>
+      </div>
+
+      <aside class="card leaderboard-card">
+        <div class="leaderboard-head">
+          <div>
+            <div class="eyebrow">LIVE</div>
+            <h2>Daily leaderboard</h2>
+          </div>
+          <span class="live-dot" title="Live updates"></span>
+        </div>
+        <div id="leaderboard" class="leaderboard"></div>
+      </aside>
+    </section>
+  </main>
+
+  <div id="giveUpModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="giveUpTitle">
+    <div class="modal card">
+      <div class="modal-icon">🏳️</div>
+      <h2 id="giveUpTitle">Give up this puzzle?</h2>
+      <p>You’ll receive <strong>0 points</strong> for this puzzle and the answer will be revealed before you continue.</p>
+      <div class="modal-actions">
+        <button id="cancelGiveUp" class="secondary">Keep trying</button>
+        <button id="confirmGiveUp" class="danger">Give Up</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

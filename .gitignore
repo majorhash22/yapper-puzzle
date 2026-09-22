@@ -1,0 +1,5 @@
+data/game-data.json
+data/game-data.json.tmp
+node_modules/
+.DS_Store
+.env
