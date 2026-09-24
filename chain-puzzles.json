@@ -1,0 +1,902 @@
+[
+  {
+    "id": "cr-rain-bow-tie-dye",
+    "words": [
+      "rain",
+      "bow",
+      "tie",
+      "dye"
+    ]
+  },
+  {
+    "id": "cr-sun-flower-pot-hole",
+    "words": [
+      "sun",
+      "flower",
+      "pot",
+      "hole"
+    ]
+  },
+  {
+    "id": "cr-star-fish-tank-top",
+    "words": [
+      "star",
+      "fish",
+      "tank",
+      "top"
+    ]
+  },
+  {
+    "id": "cr-foot-ball-park-bench",
+    "words": [
+      "foot",
+      "ball",
+      "park",
+      "bench"
+    ]
+  },
+  {
+    "id": "cr-pan-cake-walk-way",
+    "words": [
+      "pan",
+      "cake",
+      "walk",
+      "way"
+    ]
+  },
+  {
+    "id": "cr-key-board-game-plan",
+    "words": [
+      "key",
+      "board",
+      "game",
+      "plan"
+    ]
+  },
+  {
+    "id": "cr-day-dream-team-work",
+    "words": [
+      "day",
+      "dream",
+      "team",
+      "work"
+    ]
+  },
+  {
+    "id": "cr-head-light-house-plant",
+    "words": [
+      "head",
+      "light",
+      "house",
+      "plant"
+    ]
+  },
+  {
+    "id": "cr-news-paper-clip-board",
+    "words": [
+      "news",
+      "paper",
+      "clip",
+      "board"
+    ]
+  },
+  {
+    "id": "cr-tooth-brush-fire-work",
+    "words": [
+      "tooth",
+      "brush",
+      "fire",
+      "work"
+    ]
+  },
+  {
+    "id": "cr-mail-box-office-space",
+    "words": [
+      "mail",
+      "box",
+      "office",
+      "space"
+    ]
+  },
+  {
+    "id": "cr-ear-ring-tone-deaf",
+    "words": [
+      "ear",
+      "ring",
+      "tone",
+      "deaf"
+    ]
+  },
+  {
+    "id": "cr-hand-shake-down-town",
+    "words": [
+      "hand",
+      "shake",
+      "down",
+      "town"
+    ]
+  },
+  {
+    "id": "cr-back-pack-rat-race",
+    "words": [
+      "back",
+      "pack",
+      "rat",
+      "race"
+    ]
+  },
+  {
+    "id": "cr-water-fall-out-side",
+    "words": [
+      "water",
+      "fall",
+      "out",
+      "side"
+    ]
+  },
+  {
+    "id": "cr-brain-storm-cloud-nine",
+    "words": [
+      "brain",
+      "storm",
+      "cloud",
+      "nine"
+    ]
+  },
+  {
+    "id": "cr-black-board-room-mate",
+    "words": [
+      "black",
+      "board",
+      "room",
+      "mate"
+    ]
+  },
+  {
+    "id": "cr-ice-cream-puff-piece",
+    "words": [
+      "ice",
+      "cream",
+      "puff",
+      "piece"
+    ]
+  },
+  {
+    "id": "cr-sea-food-court-case",
+    "words": [
+      "sea",
+      "food",
+      "court",
+      "case"
+    ]
+  },
+  {
+    "id": "cr-coffee-break-down-town",
+    "words": [
+      "coffee",
+      "break",
+      "down",
+      "town"
+    ]
+  },
+  {
+    "id": "cr-table-top-secret-agent",
+    "words": [
+      "table",
+      "top",
+      "secret",
+      "agent"
+    ]
+  },
+  {
+    "id": "cr-rock-star-fish-tank",
+    "words": [
+      "rock",
+      "star",
+      "fish",
+      "tank"
+    ]
+  },
+  {
+    "id": "cr-bed-room-service-dog",
+    "words": [
+      "bed",
+      "room",
+      "service",
+      "dog"
+    ]
+  },
+  {
+    "id": "cr-snow-man-cave-in",
+    "words": [
+      "snow",
+      "man",
+      "cave",
+      "in"
+    ]
+  },
+  {
+    "id": "cr-fire-fly-paper-cut",
+    "words": [
+      "fire",
+      "fly",
+      "paper",
+      "cut"
+    ]
+  },
+  {
+    "id": "cr-butter-fly-trap-door",
+    "words": [
+      "butter",
+      "fly",
+      "trap",
+      "door"
+    ]
+  },
+  {
+    "id": "cr-door-bell-bottom-line",
+    "words": [
+      "door",
+      "bell",
+      "bottom",
+      "line"
+    ]
+  },
+  {
+    "id": "cr-base-ball-room-service",
+    "words": [
+      "base",
+      "ball",
+      "room",
+      "service"
+    ]
+  },
+  {
+    "id": "cr-night-club-house-plant",
+    "words": [
+      "night",
+      "club",
+      "house",
+      "plant"
+    ]
+  },
+  {
+    "id": "cr-book-mark-down-town",
+    "words": [
+      "book",
+      "mark",
+      "down",
+      "town"
+    ]
+  },
+  {
+    "id": "cr-play-ground-floor-plan",
+    "words": [
+      "play",
+      "ground",
+      "floor",
+      "plan"
+    ]
+  },
+  {
+    "id": "cr-break-fast-food-court",
+    "words": [
+      "break",
+      "fast",
+      "food",
+      "court"
+    ]
+  },
+  {
+    "id": "cr-green-house-boat-ride",
+    "words": [
+      "green",
+      "house",
+      "boat",
+      "ride"
+    ]
+  },
+  {
+    "id": "cr-blue-bird-house-boat",
+    "words": [
+      "blue",
+      "bird",
+      "house",
+      "boat"
+    ]
+  },
+  {
+    "id": "cr-gold-fish-bowl-game",
+    "words": [
+      "gold",
+      "fish",
+      "bowl",
+      "game"
+    ]
+  },
+  {
+    "id": "cr-cat-fish-market-place",
+    "words": [
+      "cat",
+      "fish",
+      "market",
+      "place"
+    ]
+  },
+  {
+    "id": "cr-dog-house-party-animal",
+    "words": [
+      "dog",
+      "house",
+      "party",
+      "animal"
+    ]
+  },
+  {
+    "id": "cr-arm-chair-lift-off",
+    "words": [
+      "arm",
+      "chair",
+      "lift",
+      "off"
+    ]
+  },
+  {
+    "id": "cr-air-port-wine-glass",
+    "words": [
+      "air",
+      "port",
+      "wine",
+      "glass"
+    ]
+  },
+  {
+    "id": "cr-flash-light-house-boat",
+    "words": [
+      "flash",
+      "light",
+      "house",
+      "boat"
+    ]
+  },
+  {
+    "id": "cr-street-light-year-book",
+    "words": [
+      "street",
+      "light",
+      "year",
+      "book"
+    ]
+  },
+  {
+    "id": "cr-note-book-case-study",
+    "words": [
+      "note",
+      "book",
+      "case",
+      "study"
+    ]
+  },
+  {
+    "id": "cr-suit-case-study-hall",
+    "words": [
+      "suit",
+      "case",
+      "study",
+      "hall"
+    ]
+  },
+  {
+    "id": "cr-brief-case-work-horse",
+    "words": [
+      "brief",
+      "case",
+      "work",
+      "horse"
+    ]
+  },
+  {
+    "id": "cr-work-horse-shoe-box",
+    "words": [
+      "work",
+      "horse",
+      "shoe",
+      "box"
+    ]
+  },
+  {
+    "id": "cr-shoe-box-spring-break",
+    "words": [
+      "shoe",
+      "box",
+      "spring",
+      "break"
+    ]
+  },
+  {
+    "id": "cr-spring-board-game-night",
+    "words": [
+      "spring",
+      "board",
+      "game",
+      "night"
+    ]
+  },
+  {
+    "id": "cr-game-night-light-house",
+    "words": [
+      "game",
+      "night",
+      "light",
+      "house"
+    ]
+  },
+  {
+    "id": "cr-high-light-house-work",
+    "words": [
+      "high",
+      "light",
+      "house",
+      "work"
+    ]
+  },
+  {
+    "id": "cr-home-work-force-field",
+    "words": [
+      "home",
+      "work",
+      "force",
+      "field"
+    ]
+  },
+  {
+    "id": "cr-field-work-shop-floor",
+    "words": [
+      "field",
+      "work",
+      "shop",
+      "floor"
+    ]
+  },
+  {
+    "id": "cr-check-point-guard-dog",
+    "words": [
+      "check",
+      "point",
+      "guard",
+      "dog"
+    ]
+  },
+  {
+    "id": "cr-body-guard-rail-road",
+    "words": [
+      "body",
+      "guard",
+      "rail",
+      "road"
+    ]
+  },
+  {
+    "id": "cr-rail-road-block-party",
+    "words": [
+      "rail",
+      "road",
+      "block",
+      "party"
+    ]
+  },
+  {
+    "id": "cr-road-side-kick-ball",
+    "words": [
+      "road",
+      "side",
+      "kick",
+      "ball"
+    ]
+  },
+  {
+    "id": "cr-cast-iron-man-cave",
+    "words": [
+      "cast",
+      "iron",
+      "man",
+      "cave"
+    ]
+  },
+  {
+    "id": "cr-milk-shake-down-town",
+    "words": [
+      "milk",
+      "shake",
+      "down",
+      "town"
+    ]
+  },
+  {
+    "id": "cr-jelly-fish-tank-top",
+    "words": [
+      "jelly",
+      "fish",
+      "tank",
+      "top"
+    ]
+  },
+  {
+    "id": "cr-shark-tank-top-secret",
+    "words": [
+      "shark",
+      "tank",
+      "top",
+      "secret"
+    ]
+  },
+  {
+    "id": "cr-blue-print-shop-floor",
+    "words": [
+      "blue",
+      "print",
+      "shop",
+      "floor"
+    ]
+  },
+  {
+    "id": "cr-print-out-side-kick",
+    "words": [
+      "print",
+      "out",
+      "side",
+      "kick"
+    ]
+  },
+  {
+    "id": "cr-lock-down-town-house",
+    "words": [
+      "lock",
+      "down",
+      "town",
+      "house"
+    ]
+  },
+  {
+    "id": "cr-town-house-work-force",
+    "words": [
+      "town",
+      "house",
+      "work",
+      "force"
+    ]
+  },
+  {
+    "id": "cr-ware-house-boat-ride",
+    "words": [
+      "ware",
+      "house",
+      "boat",
+      "ride"
+    ]
+  },
+  {
+    "id": "cr-space-bar-code-red",
+    "words": [
+      "space",
+      "bar",
+      "code",
+      "red"
+    ]
+  },
+  {
+    "id": "cr-bar-code-name-tag",
+    "words": [
+      "bar",
+      "code",
+      "name",
+      "tag"
+    ]
+  },
+  {
+    "id": "cr-name-tag-team-work",
+    "words": [
+      "name",
+      "tag",
+      "team",
+      "work"
+    ]
+  },
+  {
+    "id": "cr-team-work-place-holder",
+    "words": [
+      "team",
+      "work",
+      "place",
+      "holder"
+    ]
+  },
+  {
+    "id": "cr-land-mark-down-town",
+    "words": [
+      "land",
+      "mark",
+      "down",
+      "town"
+    ]
+  },
+  {
+    "id": "cr-trade-mark-down-hill",
+    "words": [
+      "trade",
+      "mark",
+      "down",
+      "hill"
+    ]
+  },
+  {
+    "id": "cr-down-hill-side-walk",
+    "words": [
+      "down",
+      "hill",
+      "side",
+      "walk"
+    ]
+  },
+  {
+    "id": "cr-hill-side-kick-start",
+    "words": [
+      "hill",
+      "side",
+      "kick",
+      "start"
+    ]
+  },
+  {
+    "id": "cr-kick-start-up-date",
+    "words": [
+      "kick",
+      "start",
+      "up",
+      "date"
+    ]
+  },
+  {
+    "id": "cr-start-up-town-hall",
+    "words": [
+      "start",
+      "up",
+      "town",
+      "hall"
+    ]
+  },
+  {
+    "id": "cr-up-town-hall-pass",
+    "words": [
+      "up",
+      "town",
+      "hall",
+      "pass"
+    ]
+  },
+  {
+    "id": "cr-hall-pass-word-play",
+    "words": [
+      "hall",
+      "pass",
+      "word",
+      "play"
+    ]
+  },
+  {
+    "id": "cr-word-play-ground-floor",
+    "words": [
+      "word",
+      "play",
+      "ground",
+      "floor"
+    ]
+  },
+  {
+    "id": "cr-ground-floor-board-game",
+    "words": [
+      "ground",
+      "floor",
+      "board",
+      "game"
+    ]
+  },
+  {
+    "id": "cr-floor-board-room-service",
+    "words": [
+      "floor",
+      "board",
+      "room",
+      "service"
+    ]
+  },
+  {
+    "id": "cr-room-service-dog-house",
+    "words": [
+      "room",
+      "service",
+      "dog",
+      "house"
+    ]
+  },
+  {
+    "id": "cr-boat-house-party-animal",
+    "words": [
+      "boat",
+      "house",
+      "party",
+      "animal"
+    ]
+  },
+  {
+    "id": "cr-pine-apple-pie-chart",
+    "words": [
+      "pine",
+      "apple",
+      "pie",
+      "chart"
+    ]
+  },
+  {
+    "id": "cr-apple-sauce-pan-cake",
+    "words": [
+      "apple",
+      "sauce",
+      "pan",
+      "cake"
+    ]
+  },
+  {
+    "id": "cr-sauce-pan-cake-walk",
+    "words": [
+      "sauce",
+      "pan",
+      "cake",
+      "walk"
+    ]
+  },
+  {
+    "id": "cr-walk-way-side-kick",
+    "words": [
+      "walk",
+      "way",
+      "side",
+      "kick"
+    ]
+  },
+  {
+    "id": "cr-day-light-house-boat",
+    "words": [
+      "day",
+      "light",
+      "house",
+      "boat"
+    ]
+  },
+  {
+    "id": "cr-day-dream-land-mark",
+    "words": [
+      "day",
+      "dream",
+      "land",
+      "mark"
+    ]
+  },
+  {
+    "id": "cr-dream-land-mark-down",
+    "words": [
+      "dream",
+      "land",
+      "mark",
+      "down"
+    ]
+  },
+  {
+    "id": "cr-car-pool-side-walk",
+    "words": [
+      "car",
+      "pool",
+      "side",
+      "walk"
+    ]
+  },
+  {
+    "id": "cr-pool-side-kick-ball",
+    "words": [
+      "pool",
+      "side",
+      "kick",
+      "ball"
+    ]
+  },
+  {
+    "id": "cr-kick-ball-park-bench",
+    "words": [
+      "kick",
+      "ball",
+      "park",
+      "bench"
+    ]
+  },
+  {
+    "id": "cr-park-bench-mark-down",
+    "words": [
+      "park",
+      "bench",
+      "mark",
+      "down"
+    ]
+  },
+  {
+    "id": "cr-bench-mark-down-town",
+    "words": [
+      "bench",
+      "mark",
+      "down",
+      "town"
+    ]
+  },
+  {
+    "id": "cr-mark-down-hill-side",
+    "words": [
+      "mark",
+      "down",
+      "hill",
+      "side"
+    ]
+  },
+  {
+    "id": "cr-bow-tie-breaker-box",
+    "words": [
+      "bow",
+      "tie",
+      "breaker",
+      "box"
+    ]
+  },
+  {
+    "id": "cr-box-office-space-bar",
+    "words": [
+      "box",
+      "office",
+      "space",
+      "bar"
+    ]
+  },
+  {
+    "id": "cr-office-space-bar-code",
+    "words": [
+      "office",
+      "space",
+      "bar",
+      "code"
+    ]
+  },
+  {
+    "id": "cr-red-eye-candy-bar",
+    "words": [
+      "red",
+      "eye",
+      "candy",
+      "bar"
+    ]
+  },
+  {
+    "id": "cr-eye-candy-bar-code",
+    "words": [
+      "eye",
+      "candy",
+      "bar",
+      "code"
+    ]
+  },
+  {
+    "id": "cr-candy-bar-code-name",
+    "words": [
+      "candy",
+      "bar",
+      "code",
+      "name"
+    ]
+  }
+]

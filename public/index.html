@@ -5,34 +5,78 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#111827" />
   <title>Yappers Puzzle</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/styles.css?v=3" />
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
       <div>
-        <div class="eyebrow">DAILY REBUS CHALLENGE</div>
-        <h1>Yappers Puzzle</h1>
+        <div class="eyebrow" id="headerEyebrow">YAPPERS DAILY GAMES</div>
+        <h1 id="headerTitle">Yappers Puzzle</h1>
       </div>
-      <div class="today-pill" id="todayPill">5 puzzles daily</div>
+      <div class="today-pill" id="todayPill">Two games · 5 puzzles each</div>
     </header>
 
     <section id="joinView" class="card join-card">
       <div class="badge">⚡ Speed matters</div>
-      <h2>Five puzzles. One daily score.</h2>
-      <p>Solve each rebus as fast as you can. You must solve it or <strong>Give Up</strong> before moving on. Giving up scores 0.</p>
+      <h2>Pick a game. Chase the leaderboard.</h2>
+      <p>Enter your player name once, then choose between the daily Rebus challenge and Chain Reaction. Each game has its own score, progress, puzzle rotation, and live leaderboard.</p>
       <form id="joinForm" class="join-form">
         <label for="displayName">Player name</label>
         <div class="row">
           <input id="displayName" maxlength="24" placeholder="Enter your name" autocomplete="nickname" required />
-          <button type="submit" class="primary">Play today</button>
+          <button type="submit" class="primary">Continue</button>
         </div>
         <p class="form-error" id="joinError"></p>
       </form>
     </section>
 
+    <section id="menuView" class="hidden">
+      <div class="menu-head">
+        <div>
+          <div class="eyebrow">CHOOSE TODAY'S GAME</div>
+          <h2>Ready, <span id="menuPlayerName"></span>?</h2>
+          <p class="muted-copy">Five puzzles per game every day. Leaving a puzzle after starting it does not pause the speed score.</p>
+        </div>
+        <button id="switchPlayerButton" class="secondary compact" type="button">Switch player</button>
+      </div>
+
+      <div class="game-menu-grid">
+        <article class="card game-menu-card rebus-menu-card">
+          <div class="game-icon">🧩</div>
+          <div class="eyebrow">DAILY REBUS</div>
+          <h3>Rebus</h3>
+          <p>Decode visual clues into familiar words, sayings, and phrases.</p>
+          <div class="mini-puzzle"><span>HEAD</span><span class="mini-gap">HEELS</span></div>
+          <div class="game-status" id="rebusStatus"></div>
+          <button class="primary game-select" data-game="rebus" id="rebusPlayButton" type="button">Play Rebus</button>
+        </article>
+
+        <article class="card game-menu-card chain-menu-card">
+          <div class="game-icon">🔗</div>
+          <div class="eyebrow">DAILY WORD CHAIN</div>
+          <h3>Chain Reaction</h3>
+          <p>Find two missing words. Every neighboring pair must form a familiar word or phrase.</p>
+          <div class="mini-chain" aria-label="Example chain">
+            <span>SAND</span><b>→</b><span>?</span><b>→</b><span>?</span><b>→</b><span>SPACE</span>
+          </div>
+          <div class="example-answer">Example answer: BOX, OFFICE</div>
+          <div class="game-status" id="chainStatus"></div>
+          <button class="primary game-select" data-game="chain" id="chainPlayButton" type="button">Play Chain Reaction</button>
+        </article>
+      </div>
+    </section>
+
     <section id="gameView" class="game-grid hidden">
       <div class="main-column">
+        <div class="game-toolbar">
+          <button id="backToGames" class="secondary compact" type="button">← Games</button>
+          <div class="game-toolbar-copy">
+            <div class="eyebrow" id="gameEyebrow"></div>
+            <strong id="gameTitle"></strong>
+          </div>
+        </div>
+
         <div class="status-row">
           <div><span class="muted">Player</span><strong id="playerName"></strong></div>
           <div><span class="muted">Daily score</span><strong id="totalScore">0</strong></div>
@@ -43,11 +87,11 @@
           <div class="puzzle-head">
             <div>
               <span class="muted" id="puzzleNumber">Puzzle 1 of 5</span>
-              <h2>What phrase does this represent?</h2>
+              <h2 id="puzzleQuestion">What phrase does this represent?</h2>
             </div>
           </div>
 
-          <div id="puzzleVisual" class="puzzle-visual" aria-label="Rebus puzzle"></div>
+          <div id="puzzleVisual" class="puzzle-visual" aria-label="Daily puzzle"></div>
 
           <form id="answerForm" class="answer-form">
             <input id="answerInput" autocomplete="off" placeholder="Type your answer…" required />
@@ -63,10 +107,11 @@
 
         <div id="finishedCard" class="card finished-card hidden">
           <div class="trophy">🏁</div>
-          <h2>You finished today’s five!</h2>
+          <h2 id="finishedTitle">You finished today’s five!</h2>
           <p>Your final score is <strong id="finalScore">0</strong>.</p>
           <div id="dailyBreakdown" class="breakdown"></div>
-          <p class="muted">Come back after the daily reset for five new rebus puzzles.</p>
+          <p class="muted-copy" id="finishedMessage"></p>
+          <button id="finishedBackToGames" class="secondary" type="button">Back to games</button>
         </div>
       </div>
 
@@ -74,7 +119,7 @@
         <div class="leaderboard-head">
           <div>
             <div class="eyebrow">LIVE</div>
-            <h2>Daily leaderboard</h2>
+            <h2 id="leaderboardTitle">Daily leaderboard</h2>
           </div>
           <span class="live-dot" title="Live updates"></span>
         </div>
@@ -95,6 +140,6 @@
     </div>
   </div>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=3"></script>
 </body>
 </html>
