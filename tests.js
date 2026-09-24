@@ -6,12 +6,45 @@ const net = require('node:net');
 const { spawn, spawnSync } = require('node:child_process');
 const { once } = require('node:events');
 const puzzles = require('./puzzles');
+const { initialRotation, selectPuzzles } = require('./schedule');
 
 assert.ok(puzzles.length >= 25, 'Puzzle bank should have at least 25 puzzles');
 assert.equal(new Set(puzzles.map(p => p.id)).size, puzzles.length, 'Puzzle IDs must be unique');
 for (const p of puzzles) {
   assert.ok(p.id && p.prompt, `Puzzle ${p.id || '?'} needs id and prompt`);
   assert.ok(Array.isArray(p.answers) && p.answers.length > 0, `${p.id} needs answers`);
+}
+
+const ids = puzzles.map(p => p.id);
+const used = new Set();
+const history = {};
+let rotation = initialRotation({}, ids);
+let yesterday = [];
+for (let day = 1; day <= 30; day++) {
+  const key = `2026-10-${String(day).padStart(2, '0')}`;
+  const result = selectPuzzles(rotation, ids, key, 5);
+  assert.equal(new Set(result.puzzleIds).size, 5, 'A day has five distinct puzzles');
+  assert.ok(result.puzzleIds.every(id => !yesterday.includes(id)), 'No puzzle repeats on consecutive days');
+  if (day <= 7) {
+    assert.ok(result.puzzleIds.every(id => !used.has(id)), 'The first rotation should show every puzzle once');
+    result.puzzleIds.forEach(id => used.add(id));
+  }
+  history[key] = { puzzleIds: result.puzzleIds, players: {} };
+  rotation = result.rotation;
+  yesterday = result.puzzleIds;
+}
+assert.equal(used.size, 35, 'All original puzzles should appear in the first seven days');
+assert.deepEqual(initialRotation(history, ids).previousDayIds, yesterday, 'Existing days initialize rotation safely');
+const addedId = 'brand-new-puzzle';
+const expanded = selectPuzzles(rotation, [...ids, addedId], '2026-10-31', 5);
+assert.ok(expanded.rotation.knownIds.includes(addedId), 'New dataset entries join the rotation');
+let expandedRotation = initialRotation({}, [...ids, addedId]);
+let previous = [];
+for (let day = 1; day <= 50; day++) {
+  const result = selectPuzzles(expandedRotation, [...ids, addedId], `2026-11-${String(day).padStart(2, '0')}`, 5);
+  assert.ok(result.puzzleIds.every(id => !previous.includes(id)), 'An uneven bank must avoid consecutive-day repeats');
+  previous = result.puzzleIds;
+  expandedRotation = result.rotation;
 }
 
 async function freePort() {
@@ -72,6 +105,9 @@ async function main() {
     assert.notEqual(noVolume.status, 0, 'Railway must refuse to start without persistent storage');
     assert.match(noVolume.stderr, /needs a Railway volume/);
 
+    fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify({
+      users: {}, days: { '2026-01-01': { puzzleIds: ids.slice(0, 5), players: {} } }
+    }));
     running = await launch(dataDir, port);
     const { base } = running;
     const page = await fetch(base);
@@ -81,6 +117,10 @@ async function main() {
     const bob = await request(base, '/api/register', { displayName: 'Bob' });
     assert.notEqual(alice.userId, bob.userId);
     assert.equal(alice.state.puzzle.id, bob.state.puzzle.id, 'Daily puzzles must match across players');
+    const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
+    assert.ok(saved.days['2026-01-01'], 'Upgrading must preserve saved days');
+    assert.ok(saved.days[alice.state.date].puzzleIds.every(id => !ids.slice(0, 5).includes(id)),
+      'The first upgraded day must avoid previously served puzzles');
 
     const wrong = await request(base, '/api/answer', { userId: alice.userId, answer: 'a completely wrong guess' });
     assert.equal(wrong.correct, false);

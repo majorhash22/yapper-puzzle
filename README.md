@@ -1,6 +1,6 @@
 # Yappers Puzzle
 
-A browser based daily rebus game for multiple players. Each day, everyone gets the same five puzzles and shares a live leaderboard. Players must answer the current puzzle or press **Give Up** before continuing. A skipped puzzle earns zero points. No timer is displayed.
+A browser based daily rebus game for multiple players. Each day, everyone gets the same five puzzles and shares a live leaderboard. Players must answer the current puzzle or press **Give Up** before continuing. A skipped puzzle earns zero points. No timer is displayed. The server rotates through unused puzzles before reusing them, and avoids serving yesterday's puzzles again the next day.
 
 ## Quick start
 
@@ -15,7 +15,7 @@ Open <http://localhost:3000>. Use separate browsers or a private window to test 
 
 ## Put it on GitHub
 
-Extract the ZIP first. `package.json`, `server.js`, `railway.json`, `public/`, and `puzzles.js` must all be at the **repository root**, not under an extra folder.
+Extract the ZIP first. `package.json`, `server.js`, `railway.json`, `public/`, `schedule.js`, `puzzles.js`, and `puzzles.json` must all be at the **repository root**, not under an extra folder.
 
 In VS Code, open the extracted `yappers-puzzle` folder and open its terminal. Create an empty GitHub repository named `yappers-puzzle`, then run (replace `YOUR_USERNAME`):
 
@@ -48,13 +48,30 @@ If the repository already exists, copy the extracted files into your existing cl
 - The score timer starts when a puzzle is first delivered and survives page refreshes. The UI does not show elapsed time.
 - The server stores player and daily game data in `game-data.json` on the attached volume. Enable Railway volume backups if you need recoverable history. A corrupt data file causes startup to fail rather than resetting scores.
 - Each browser keeps a random player ID in local storage. This is suitable for a friendly game; it is not a secure login or a cheat resistant competition.
-- To add puzzles, edit `puzzles.js`. Keep every puzzle ID unique. Already selected IDs for previous dates are stored with that day's progress.
+- The 35 included puzzles supply seven days of unique five-puzzle sets. To extend the rotation, add entries to `puzzles.json`; 150 puzzles supply 30 days before the bank must cycle. Already selected IDs for previous dates remain fixed in the saved game data.
+- Keep existing IDs stable and never remove a puzzle while an active day may still reference it. New entries automatically join the current rotation. The first upgraded day respects previously saved days when initializing the rotation. A repeated puzzle already published for the current day stays in place so players' current games do not change mid-day.
+
+## Puzzle dataset
+
+`puzzles.json` is the puzzle dataset. Each entry needs a unique lowercase ID, the rebus display as trusted HTML, and one or more accepted answers:
+
+```json
+{
+  "id": "head-over-heels",
+  "prompt": "<div class=\"stack huge\"><span>HEAD</span><span class=\"gap-lg\">HEELS</span></div>",
+  "answers": ["head over heels"]
+}
+```
+
+Place new entries inside the existing JSON array, separated by commas. IDs may contain lowercase letters, digits, and hyphens. Answers ignore capitalization, punctuation, and extra spaces. Add common reasonable answer variants to `answers`. Only include reviewed, trusted HTML in `prompt`; it is displayed directly in players' browsers. If your source is a CSV, spreadsheet, images, or a link to a puzzle collection, it needs conversion and answer review before adding it. For image puzzles, supply the image files and usage permission; the display template can then be adapted for images. Maintain at least 10 puzzles for five-puzzle days.
 
 ## Project files
 
 ```text
 public/       Browser UI
-puzzles.js    Rebus puzzle bank
+puzzles.json  Editable rebus puzzle dataset
+puzzles.js    Dataset loader and validation
+schedule.js   Shared daily selection and rotation
 server.js     Node server, scoring, daily state, leaderboard
 railway.json  Railway start command and healthcheck
 tests.js      Project and multiplayer smoke tests

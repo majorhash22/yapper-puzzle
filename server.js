@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 const puzzles = require('./puzzles');
+const { initialRotation, selectPuzzles } = require('./schedule');
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_TIMEZONE = process.env.APP_TIMEZONE || 'America/Regina';
@@ -45,23 +46,15 @@ function dayKey(date = new Date()) {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-function dailyPuzzleIds(key) {
-  const pool = [...puzzles];
-  const bytes = crypto.createHash('sha256').update(`rebus-daily:${key}`).digest();
-  let cursor = 0;
-  for (let i = pool.length - 1; i > 0; i--) {
-    if (cursor >= bytes.length) cursor = 0;
-    const j = bytes[cursor++] % (i + 1);
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  return pool.slice(0, DAILY_COUNT).map(p => p.id);
-}
-
 function getPuzzle(id) { return puzzles.find(p => p.id === id); }
 
 function ensureDay(key) {
   if (!db.days[key]) {
-    db.days[key] = { puzzleIds: dailyPuzzleIds(key), players: {} };
+    const ids = puzzles.map(p => p.id);
+    const rotation = db.rotation || initialRotation(db.days, ids);
+    const result = selectPuzzles(rotation, ids, key, DAILY_COUNT);
+    db.rotation = result.rotation;
+    db.days[key] = { puzzleIds: result.puzzleIds, players: {} };
     saveDb();
   }
   return db.days[key];
