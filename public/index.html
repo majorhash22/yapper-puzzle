@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#111827" />
   <title>Yappers Puzzle</title>
-  <link rel="stylesheet" href="/styles.css?v=3" />
+  <link rel="stylesheet" href="/styles.css?v=4" />
 </head>
 <body>
   <main class="shell">
@@ -14,13 +14,13 @@
         <div class="eyebrow" id="headerEyebrow">YAPPERS DAILY GAMES</div>
         <h1 id="headerTitle">Yappers Puzzle</h1>
       </div>
-      <div class="today-pill" id="todayPill">Two games · 5 puzzles each</div>
+      <div class="today-pill" id="todayPill">Rebus + Chainly daily</div>
     </header>
 
     <section id="joinView" class="card join-card">
       <div class="badge">⚡ Speed matters</div>
       <h2>Pick a game. Chase the leaderboard.</h2>
-      <p>Enter your player name once, then choose between the daily Rebus challenge and Chain Reaction. Each game has its own score, progress, puzzle rotation, and live leaderboard.</p>
+      <p>Enter your player name to play the daily Rebus challenge and its live leaderboard. Chainly is also ready to play in this browser.</p>
       <form id="joinForm" class="join-form">
         <label for="displayName">Player name</label>
         <div class="row">
@@ -29,6 +29,7 @@
         </div>
         <p class="form-error" id="joinError"></p>
       </form>
+      <a class="secondary chainly-join-link" href="./chainly/index.html">Play Chainly →</a>
     </section>
 
     <section id="menuView" class="hidden">
@@ -36,7 +37,7 @@
         <div>
           <div class="eyebrow">CHOOSE TODAY'S GAME</div>
           <h2>Ready, <span id="menuPlayerName"></span>?</h2>
-          <p class="muted-copy">Five puzzles per game every day. Leaving a puzzle after starting it does not pause the speed score.</p>
+          <p class="muted-copy">Rebus has five speed-scored puzzles per day. Chainly has one seven-word chain, with the fewest guesses winning.</p>
         </div>
         <button id="switchPlayerButton" class="secondary compact" type="button">Switch player</button>
       </div>
@@ -55,14 +56,13 @@
         <article class="card game-menu-card chain-menu-card">
           <div class="game-icon">🔗</div>
           <div class="eyebrow">DAILY WORD CHAIN</div>
-          <h3>Chain Reaction</h3>
-          <p>Find two missing words. Every neighboring pair must form a familiar word or phrase.</p>
+          <h3>Chainly</h3>
+          <p>Fill five missing words from either end of a seven-word chain. Solve in as few guesses as you can.</p>
           <div class="mini-chain" aria-label="Example chain">
-            <span>SAND</span><b>→</b><span>?</span><b>→</b><span>?</span><b>→</b><span>SPACE</span>
+            <span>CHAIN</span><b>→</b><span>REACTION</span><b>→</b><span>TIME</span>
           </div>
-          <div class="example-answer">Example answer: BOX, OFFICE</div>
-          <div class="game-status" id="chainStatus"></div>
-          <button class="primary game-select" data-game="chain" id="chainPlayButton" type="button">Play Chain Reaction</button>
+          <div class="example-answer">One new chain each local day · saved in this browser</div>
+          <a class="primary chainly-menu-link" href="./chainly/index.html">Play Chainly</a>
         </article>
       </div>
     </section>
@@ -140,6 +140,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=3"></script>
+  <script src="/app.js?v=4"></script>
 </body>
 </html>

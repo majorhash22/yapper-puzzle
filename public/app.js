@@ -48,7 +48,7 @@ function hideAllViews() {
 function resetHeader() {
   $('headerEyebrow').textContent = 'YAPPERS DAILY GAMES';
   $('headerTitle').textContent = 'Yappers Puzzle';
-  $('todayPill').textContent = menuState?.date ? `${menuState.date} · 2 daily games` : 'Two games · 5 puzzles each';
+  $('todayPill').textContent = menuState?.date ? `${menuState.date} · Rebus + Chainly` : 'Rebus + Chainly daily';
 }
 
 function showJoin() {

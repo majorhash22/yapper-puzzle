@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#091426">
+  <title>Chainly · Daily Word Chain</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./script.js" defer></script>
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <a class="back-link" href="../index.html" aria-label="Back to Yappers Puzzle">← <span>Games</span></a>
+      <div class="brand"><span class="brand-icon" aria-hidden="true">↗</span><div><h1>Chainly</h1><p>THE DAILY WORD CHAIN</p></div></div>
+      <div class="header-actions">
+        <button class="icon-button" id="helpButton" type="button" aria-label="How to play" title="How to play">?</button>
+        <button class="icon-button" id="statsButton" type="button" aria-label="Statistics" title="Statistics">▥</button>
+      </div>
+    </header>
+
+    <section class="game" aria-label="Daily word chain game">
+      <div class="game-intro">
+        <div><span class="kicker" id="puzzleNumber">PUZZLE</span><h2>Connect the words.</h2></div>
+        <div class="guesses"><span>GUESSES</span><strong id="guessCount">0</strong></div>
+      </div>
+      <p class="instruction">Fill five missing words. Each pair makes a familiar phrase.</p>
+      <div class="direction-bar" aria-label="Solving direction">
+        <button id="topDirection" class="direction-button" type="button" aria-pressed="true">↓ From top</button>
+        <button id="bottomDirection" class="direction-button" type="button" aria-pressed="false">↑ From bottom</button>
+      </div>
+      <div id="board" class="board" role="group" aria-label="Seven word chain rows"></div>
+      <p class="message" id="message" role="status" aria-live="polite"></p>
+      <div id="keyboard" class="keyboard" role="group" aria-label="On-screen keyboard"></div>
+      <button id="giveUpButton" class="give-up" type="button">Give up / Reveal</button>
+    </section>
+  </main>
+
+  <div class="overlay hidden" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal" tabindex="-1">
+      <button class="close-button" type="button" data-close aria-label="Close instructions">×</button>
+      <span class="kicker">HOW TO PLAY</span><h2 id="helpTitle">Find the links.</h2>
+      <p>Each neighboring pair makes a familiar phrase or compound word. For example:</p>
+      <div class="example" aria-label="Chain, Reaction, Time. Chain reaction and reaction time."><span>CHAIN</span><i>↕</i><span class="example-middle">REACTION</span><i>↕</i><span>TIME</span></div>
+      <p>The first and last words are given. Fill the five missing rows from either end. Use ↑ or ↓ to switch ends. Every submitted guess counts; a wrong answer reveals one more letter. Fewer guesses make a better score.</p>
+      <button class="primary modal-primary" type="button" data-close>Let’s play</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="statsModal" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+    <div class="modal" tabindex="-1">
+      <button class="close-button" type="button" data-close aria-label="Close statistics">×</button>
+      <span class="kicker">YOUR PROGRESS</span><h2 id="statsTitle">Statistics</h2>
+      <div class="stats-grid" id="statsGrid"></div>
+      <h3>Guess distribution</h3><div id="distribution" class="distribution"></div>
+      <p class="fine-print">Stats are saved in this browser.</p>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="resultsModal" role="dialog" aria-modal="true" aria-labelledby="resultsTitle">
+    <div class="modal result-modal" tabindex="-1">
+      <button class="close-button" type="button" data-close aria-label="Close results">×</button>
+      <span class="result-symbol" id="resultSymbol" aria-hidden="true">✦</span>
+      <span class="kicker" id="resultEyebrow">TODAY’S CHAIN</span><h2 id="resultsTitle">Nicely connected.</h2>
+      <p id="resultSummary"></p>
+      <div id="shareGrid" class="share-grid" aria-label="Spoiler-free results"></div>
+      <div class="modal-actions"><button id="shareButton" class="primary" type="button">Copy result</button><button id="resultStatsButton" class="secondary" type="button">Stats</button></div>
+      <p class="countdown-label">NEXT PUZZLE IN <strong id="countdown">--:--:--</strong></p>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal" tabindex="-1">
+      <span class="kicker">REVEAL THE CHAIN</span><h2 id="confirmTitle">Give up today?</h2>
+      <p>All remaining words will be revealed. This run will not count toward your streak.</p>
+      <div class="modal-actions"><button id="keepPlaying" class="secondary" type="button">Keep playing</button><button id="confirmReveal" class="danger" type="button">Reveal words</button></div>
+    </div>
+  </div>
+</body>
+</html>
