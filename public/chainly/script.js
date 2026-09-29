@@ -54,6 +54,104 @@ let input = '';
 let lastFocused = null;
 let lockedAnimation = -1;
 let messageTimer;
+let leaderboardUserId = '';
+let leaderboardQueue = Promise.resolve();
+const leaderboardAvailable = typeof location !== 'undefined' && location.protocol !== 'file:';
+
+function sharedPlayerId() {
+  try { return localStorage.getItem('yappersPuzzleUserId') || ''; } catch { return ''; }
+}
+function setSharedPlayerId(id) {
+  try { localStorage.setItem('yappersPuzzleUserId', id); } catch { /* The daily game still works without storage. */ }
+}
+async function leaderboardApi(path, options) {
+  const response = await fetch(path, options);
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || 'Leaderboard unavailable.');
+  return body;
+}
+function showLeaderboardPlayer(name) {
+  $('leaderboardJoin').classList.add('hidden');
+  $('leaderboardPlayer').classList.remove('hidden');
+  $('leaderboardPlayer').textContent = `Playing as ${name}`;
+  $('leaderboardStatus').textContent = '';
+}
+function renderLeaderboard(rows) {
+  const root = $('leaderboard'); root.replaceChildren();
+  if (!rows.length) {
+    const empty = document.createElement('p'); empty.className = 'empty';
+    empty.textContent = 'No scores yet. Be the first!'; root.append(empty); return;
+  }
+  for (const row of rows) {
+    const item = document.createElement('div');
+    item.className = `leader-row${row.userId === leaderboardUserId ? ' you' : ''}`;
+    const rank = document.createElement('span'); rank.className = 'rank'; rank.textContent = `#${row.rank}`;
+    const name = document.createElement('span'); name.className = 'leader-name'; name.textContent = row.displayName;
+    const detail = document.createElement('small'); detail.className = 'leader-sub';
+    detail.textContent = row.status === 'won' ? 'Solved 5 / 5' : row.status === 'gave-up' ? 'Revealed' : `${row.solved} / 5 solved`;
+    name.append(detail);
+    const score = document.createElement('strong'); score.className = 'leader-score';
+    score.textContent = row.status === 'gave-up' ? '—' : `${row.guesses} ${row.guesses === 1 ? 'guess' : 'guesses'}`;
+    item.append(rank, name, score); root.append(item);
+  }
+}
+async function refreshLeaderboard() {
+  if (!leaderboardAvailable) return;
+  try {
+    const data = await leaderboardApi(`/api/chainly/leaderboard?date=${encodeURIComponent(date)}`);
+    if (data.date === date) renderLeaderboard(data.leaderboard);
+  } catch {
+    $('leaderboardStatus').textContent = 'Live scores are temporarily unavailable.';
+  }
+}
+// Leaderboard updates are queued in submission order. Network failures never
+// block a guess, and the current saved result is submitted again on reload.
+function syncLeaderboard() {
+  if (!leaderboardAvailable || !leaderboardUserId) return;
+  if (progress.playerId && progress.playerId !== leaderboardUserId) {
+    $('leaderboardStatus').textContent = 'This chain is saved for a different player on this browser.';
+    return;
+  }
+  progress.playerId = leaderboardUserId;
+  save(PROGRESS_KEY, progress);
+  const snapshot = {
+    userId: leaderboardUserId, date, status: progress.status,
+    guesses: progress.guesses, solved: progress.locked.filter(Boolean).length
+  };
+  leaderboardQueue = leaderboardQueue.catch(() => {}).then(async () => {
+    const data = await leaderboardApi('/api/chainly/progress', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snapshot)
+    });
+    if (data.date === date) renderLeaderboard(data.leaderboard);
+    $('leaderboardStatus').textContent = '';
+  }).catch(() => { $('leaderboardStatus').textContent = 'Score sync pending. Refresh to retry.'; });
+}
+async function connectLeaderboard() {
+  if (!leaderboardAvailable) {
+    $('leaderboardJoin').classList.add('hidden');
+    $('leaderboard').textContent = 'Live scores are available on the hosted Yappers Puzzle site.';
+    return;
+  }
+  await refreshLeaderboard();
+  const id = sharedPlayerId();
+  if (id) {
+    try {
+      const menu = await leaderboardApi(`/api/menu?userId=${encodeURIComponent(id)}`);
+      leaderboardUserId = id;
+      showLeaderboardPlayer(menu.displayName);
+      syncLeaderboard();
+    } catch { $('leaderboardStatus').textContent = 'Enter your name to join the leaderboard.'; }
+  }
+  if (typeof EventSource !== 'undefined') {
+    const events = new EventSource('/api/events');
+    events.addEventListener('leaderboard', event => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.game === 'chainly' && data.date === date) renderLeaderboard(data.leaderboard);
+      } catch { /* Ignore an incomplete event. */ }
+    });
+  }
+}
 
 function freshProgress() { return {date,locked:[false,false,false,false,false],misses:[0,0,0,0,0],guesses:0,direction:'top',status:'playing'}; }
 function restoreProgress() {
@@ -143,7 +241,7 @@ function finish(status) {
     stats.best=Math.max(stats.best,stats.streak);
     stats.distribution[progress.guesses]=(stats.distribution[progress.guesses]||0)+1;
   } else stats.streak=0;
-  save(PROGRESS_KEY,progress); save(STATS_KEY,stats); render(); openResults();
+  save(PROGRESS_KEY,progress); save(STATS_KEY,stats); render(); syncLeaderboard(); openResults();
 }
 function submit() {
   const row=activeIndex(); if (row<0) return;
@@ -157,11 +255,11 @@ function submit() {
     if (progress.locked.every(Boolean)) return finish('won');
     const next=activeIndex();
     input=words()[next].slice(0,hintCount(next));
-    save(PROGRESS_KEY,progress);render();showMessage(`${answer} connects!`);
+    save(PROGRESS_KEY,progress);render();syncLeaderboard();showMessage(`${answer} connects!`);
   } else {
     progress.misses[row-1]++;
     input=answer.slice(0,hintCount(row));
-    save(PROGRESS_KEY,progress);render();showMessage('Not quite. One more letter revealed.');
+    save(PROGRESS_KEY,progress);render();syncLeaderboard();showMessage('Not quite. One more letter revealed.');
     const active=$('board').querySelector('.word-row.active');
     active?.classList.add('shake');
   }
@@ -250,6 +348,27 @@ $('giveUpButton').addEventListener('click',()=>showModal('confirmModal'));
 $('keepPlaying').addEventListener('click',()=>closeModal($('confirmModal')));
 $('confirmReveal').addEventListener('click',()=>finish('gave-up'));
 $('shareButton').addEventListener('click',copyResult);
+$('resultLeaderboardButton').addEventListener('click', () => {
+  closeModal($('resultsModal'));
+  $('leaderboardCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+$('leaderboardJoin').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!leaderboardAvailable) return;
+  const name = $('leaderboardName').value.trim();
+  if (name.length < 2) return;
+  $('leaderboardStatus').textContent = 'Joining…';
+  try {
+    const data = await leaderboardApi('/api/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ displayName: name })
+    });
+    leaderboardUserId = data.userId;
+    setSharedPlayerId(data.userId);
+    showLeaderboardPlayer(data.menu.displayName);
+    syncLeaderboard();
+  } catch (error) { $('leaderboardStatus').textContent = error.message; }
+});
 document.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>closeModal(button.closest('.overlay'))));
 document.querySelectorAll('.overlay').forEach(modal=>modal.addEventListener('click',event=>{if(event.target===modal && modal.id!=='confirmModal')closeModal(modal);}));
 document.addEventListener('keydown',event=>{
@@ -272,7 +391,8 @@ document.addEventListener('keydown',event=>{
 });
 buildKeyboard();render();
 if(progress.status!=='playing')openResults();
+connectLeaderboard();
 setInterval(()=>{
-  if(localDate()!==date){date=localDate();puzzle=todayPuzzle(date);progress=restoreProgress();input='';document.querySelectorAll('.overlay').forEach(el=>el.classList.add('hidden'));render();showMessage('A new daily chain is ready!');}
+  if(localDate()!==date){date=localDate();puzzle=todayPuzzle(date);progress=restoreProgress();input='';document.querySelectorAll('.overlay').forEach(el=>el.classList.add('hidden'));render();refreshLeaderboard();syncLeaderboard();showMessage('A new daily chain is ready!');}
   updateCountdown();
 },1000);

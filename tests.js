@@ -129,8 +129,11 @@ async function main() {
 
     const page = await fetch(base);
     const html = await page.text();
-    assert.ok(html.includes('Chain Reaction'), 'Game menu must include Chain Reaction');
+    assert.ok(html.includes('Chainly'), 'Game menu must include Chainly');
     assert.ok(html.includes('Rebus'), 'Game menu must include Rebus');
+    const chainlyPage = await fetch(`${base}/chainly/index.html`);
+    assert.equal(chainlyPage.status, 200);
+    assert.match(await chainlyPage.text(), /id="leaderboard"/);
 
     const alice = await request(base, '/api/register', { displayName: 'Alice' });
     const bob = await request(base, '/api/register', { displayName: 'Bob' });
@@ -186,6 +189,26 @@ async function main() {
     const aliceRebusRow = rebusBoardBefore.leaderboard.find(row => row.userId === alice.userId);
     assert.equal(aliceRebusRow.score, 0, 'Chain Reaction score must not affect the Rebus leaderboard');
 
+    const dailyDate = aliceRebus.date;
+    await request(base, '/api/chainly/progress', { userId: alice.userId, date: dailyDate, status: 'playing', guesses: 3, solved: 2 });
+    await request(base, '/api/chainly/progress', { userId: bob.userId, date: dailyDate, status: 'won', guesses: 7, solved: 5 });
+    const winning = await request(base, '/api/chainly/progress', { userId: alice.userId, date: dailyDate, status: 'won', guesses: 6, solved: 5 });
+    assert.deepEqual(winning.leaderboard.map(row => row.displayName), ['Alice', 'Bob'], 'Fewer guesses must rank first');
+    assert.equal(winning.leaderboard[0].rank, 1);
+    const duplicate = await request(base, '/api/chainly/progress', { userId: alice.userId, date: dailyDate, status: 'won', guesses: 5, solved: 5 });
+    assert.equal(duplicate.leaderboard[0].guesses, 6, 'A finished result must not be overwritten');
+
+    const charlie = await request(base, '/api/register', { displayName: 'Charlie' });
+    await request(base, '/api/chainly/progress', { userId: charlie.userId, date: dailyDate, status: 'gave-up', guesses: 2, solved: 1 });
+    const chainlyBoard = await request(base, `/api/chainly/leaderboard?date=${dailyDate}`);
+    assert.deepEqual(chainlyBoard.leaderboard.map(row => row.displayName), ['Alice', 'Bob', 'Charlie']);
+    assert.equal(chainlyBoard.leaderboard[2].status, 'gave-up');
+    const invalid = await fetch(`${base}/api/chainly/progress`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: alice.userId, date: dailyDate, status: 'won', guesses: -1, solved: 5 })
+    });
+    assert.equal(invalid.status, 400, 'Invalid leaderboard submissions must be rejected');
+
     await stop(running.child);
     running = await launch(dataDir, port);
 
@@ -196,7 +219,10 @@ async function main() {
     const restoredRebus = await request(running.base, `/api/state?userId=${alice.userId}&game=rebus`);
     assert.equal(restoredRebus.puzzle.id, aliceRebus.puzzle.id, 'Rebus progress must remain independent and persistent');
 
-    console.log(`Passed: ${rebusPuzzles.length} Rebus + ${chainPuzzles.length} Chain Reaction puzzles, menu, separate leaderboards, scoring, non-repeat rotation, migration, and restart persistence.`);
+    const restoredChainly = await request(running.base, `/api/chainly/leaderboard?date=${dailyDate}`);
+    assert.equal(restoredChainly.leaderboard[0].guesses, 6, 'Chainly standings must survive a restart');
+
+    console.log('Passed: Rebus, legacy Chain Reaction, Chainly leaderboard ordering and persistence, scoring, rotation, migration, and restart.');
   } finally {
     if (running) await stop(running.child);
     fs.rmSync(dataDir, { recursive: true, force: true });

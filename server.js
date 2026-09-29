@@ -57,9 +57,10 @@ function loadDb() {
     if (!parsed.users || typeof parsed.users !== 'object') parsed.users = {};
     if (!parsed.days || typeof parsed.days !== 'object') parsed.days = {};
     if (!parsed.chainDays || typeof parsed.chainDays !== 'object') parsed.chainDays = {};
+    if (!parsed.chainlyDays || typeof parsed.chainlyDays !== 'object') parsed.chainlyDays = {};
     return parsed;
   }
-  return { users: {}, days: {}, chainDays: {} };
+  return { users: {}, days: {}, chainDays: {}, chainlyDays: {} };
 }
 
 function saveDb() {
@@ -304,6 +305,39 @@ function sendLeaderboard(gameId) {
   for (const res of sseClients) res.write(`event: leaderboard\ndata: ${payload}\n\n`);
 }
 
+// Chainly keeps its puzzle and guesses in the browser. Only its daily standing
+// is stored here, alongside the Rebus accounts and in the same Railway volume.
+function chainlyDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) return null;
+  const today = Date.parse(`${dayKey()}T00:00:00Z`);
+  return Math.abs(timestamp - today) <= 86400000 ? value : null;
+}
+
+function chainlyLeaderboard(key) {
+  const players = db.chainlyDays[key]?.players || {};
+  const stage = status => status === 'won' ? 0 : status === 'playing' ? 1 : 2;
+  return Object.entries(players).map(([userId, player]) => ({
+    userId,
+    displayName: db.users[userId]?.displayName || 'Anonymous',
+    guesses: player.guesses,
+    solved: player.solved,
+    status: player.status,
+    finishedAt: player.finishedAt
+  })).sort((a, b) => {
+    if (stage(a.status) !== stage(b.status)) return stage(a.status) - stage(b.status);
+    if (a.status === 'playing' && a.solved !== b.solved) return b.solved - a.solved;
+    if (a.guesses !== b.guesses) return a.guesses - b.guesses;
+    return (a.finishedAt || '').localeCompare(b.finishedAt || '') || a.displayName.localeCompare(b.displayName);
+  }).slice(0, 100).map((row, i) => ({ ...row, rank: i + 1 }));
+}
+
+function sendChainlyLeaderboard(key) {
+  const payload = JSON.stringify({ game: 'chainly', date: key, leaderboard: chainlyLeaderboard(key) });
+  for (const res of sseClients) res.write(`event: leaderboard\ndata: ${payload}\n\n`);
+}
+
 function serveStatic(reqPath, res) {
   let rel = reqPath === '/' ? 'index.html' : reqPath.replace(/^\/+/, '');
   rel = path.normalize(rel).replace(/^(\.\.[/\\])+/, '');
@@ -373,6 +407,43 @@ async function handleApi(req, res, url) {
     if (!gameId) return json(res, 400, { error: 'Unknown game.' });
     const key = dayKey();
     return json(res, 200, { date: key, game: gameId, leaderboard: leaderboardFor(key, gameId) });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/chainly/leaderboard') {
+    const key = chainlyDate(url.searchParams.get('date'));
+    if (!key) return json(res, 400, { error: 'Invalid daily puzzle date.' });
+    return json(res, 200, { date: key, game: 'chainly', leaderboard: chainlyLeaderboard(key) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/chainly/progress') {
+    const body = await readJson(req);
+    const userId = String(body.userId || '');
+    const key = chainlyDate(body.date);
+    const { status, guesses, solved } = body;
+    if (!db.users[userId]) return json(res, 404, { error: 'Player not found.' });
+    if (!key || !['playing', 'won', 'gave-up'].includes(status) ||
+        !Number.isInteger(guesses) || guesses < 0 || guesses > 999 ||
+        !Number.isInteger(solved) || solved < 0 || solved > 5 || solved > guesses ||
+        (status === 'won' && solved !== 5) || (status !== 'won' && solved === 5)) {
+      return json(res, 400, { error: 'Invalid Chainly progress.' });
+    }
+    const day = db.chainlyDays[key] ||= { players: {} };
+    const previous = day.players[userId];
+    if (previous?.status === 'won' || previous?.status === 'gave-up') {
+      return json(res, 200, { date: key, game: 'chainly', leaderboard: chainlyLeaderboard(key) });
+    }
+    if (previous && (guesses < previous.guesses || solved < previous.solved)) {
+      return json(res, 409, { error: 'An older progress update was ignored.' });
+    }
+    day.players[userId] = {
+      guesses, solved, status,
+      finishedAt: status === 'playing' ? null : new Date().toISOString()
+    };
+    saveDb();
+    const payload = { date: key, game: 'chainly', leaderboard: chainlyLeaderboard(key) };
+    json(res, 200, payload);
+    sendChainlyLeaderboard(key);
+    return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/register') {

@@ -3,23 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#091426">
+  <meta name="theme-color" content="#0b1020">
   <title>Chainly · Daily Word Chain</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./script.js" defer></script>
 </head>
 <body>
-  <main class="app">
-    <header class="header">
-      <a class="back-link" href="../index.html" aria-label="Back to Yappers Puzzle">← <span>Games</span></a>
-      <div class="brand"><span class="brand-icon" aria-hidden="true">↗</span><div><h1>Chainly</h1><p>THE DAILY WORD CHAIN</p></div></div>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="eyebrow">YAPPERS DAILY GAMES</span><h1>Yappers · Chainly</h1></div>
       <div class="header-actions">
         <button class="icon-button" id="helpButton" type="button" aria-label="How to play" title="How to play">?</button>
         <button class="icon-button" id="statsButton" type="button" aria-label="Statistics" title="Statistics">▥</button>
       </div>
     </header>
 
-    <section class="game" aria-label="Daily word chain game">
+    <div class="game-grid">
+    <div class="main-column">
+      <div class="game-toolbar"><a class="secondary back-link" href="../index.html" aria-label="Back to Yappers Puzzle">← Games</a><div><span class="eyebrow">DAILY WORD CHAIN</span><strong>Connect five missing words</strong></div></div>
+    <section class="card game" aria-label="Daily word chain game">
       <div class="game-intro">
         <div><span class="kicker" id="puzzleNumber">PUZZLE</span><h2>Connect the words.</h2></div>
         <div class="guesses"><span>GUESSES</span><strong id="guessCount">0</strong></div>
@@ -34,6 +36,19 @@
       <div id="keyboard" class="keyboard" role="group" aria-label="On-screen keyboard"></div>
       <button id="giveUpButton" class="give-up" type="button">Give up / Reveal</button>
     </section>
+    </div>
+    <aside class="card leaderboard-card" id="leaderboardCard" aria-label="Chainly daily leaderboard">
+      <div class="leaderboard-head"><div><span class="eyebrow">LIVE</span><h2>Daily leaderboard</h2></div><span class="live-dot" aria-hidden="true"></span></div>
+      <p class="leaderboard-intro">Fewest guesses wins. Rebus players can use the same name.</p>
+      <p id="leaderboardPlayer" class="player-label hidden"></p>
+      <form id="leaderboardJoin" class="join-form">
+        <label for="leaderboardName">Join the leaderboard</label>
+        <div class="join-row"><input id="leaderboardName" name="playerName" maxlength="24" minlength="2" autocomplete="nickname" placeholder="Player name" required><button class="primary" type="submit">Join</button></div>
+      </form>
+      <p id="leaderboardStatus" class="leaderboard-status" role="status" aria-live="polite"></p>
+      <div id="leaderboard" class="leaderboard"><p class="empty">Loading scores…</p></div>
+    </aside>
+    </div>
   </main>
 
   <div class="overlay hidden" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
@@ -64,7 +79,7 @@
       <span class="kicker" id="resultEyebrow">TODAY’S CHAIN</span><h2 id="resultsTitle">Nicely connected.</h2>
       <p id="resultSummary"></p>
       <div id="shareGrid" class="share-grid" aria-label="Spoiler-free results"></div>
-      <div class="modal-actions"><button id="shareButton" class="primary" type="button">Copy result</button><button id="resultStatsButton" class="secondary" type="button">Stats</button></div>
+      <div class="modal-actions"><button id="shareButton" class="primary" type="button">Copy result</button><button id="resultStatsButton" class="secondary" type="button">Stats</button><button id="resultLeaderboardButton" class="secondary" type="button">Leaderboard</button></div>
       <p class="countdown-label">NEXT PUZZLE IN <strong id="countdown">--:--:--</strong></p>
     </div>
   </div>
