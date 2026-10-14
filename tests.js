@@ -35,13 +35,13 @@ assert.equal(rebusPuzzles.length, 35, 'Expected the existing 35 Rebus puzzles');
 assert.equal(new Set(rebusPuzzles.map(p => p.id)).size, rebusPuzzles.length, 'Rebus IDs must be unique');
 validateRotation(rebusPuzzles, 7);
 
-assert.equal(chainPuzzles.length, 100, 'Chain Reaction should contain 100 puzzles');
+assert.equal(chainPuzzles.length, 200, 'Chain Reaction should contain 200 puzzles');
 assert.equal(new Set(chainPuzzles.map(p => p.id)).size, chainPuzzles.length, 'Chain Reaction IDs must be unique');
 assert.equal(new Set(chainPuzzles.map(p => p.words.join('|').toLowerCase())).size, chainPuzzles.length, 'Chain Reaction chains must be unique');
 for (const puzzle of chainPuzzles) {
   assert.equal(puzzle.words.length, 4, `${puzzle.id} must contain four words`);
 }
-validateRotation(chainPuzzles, 20);
+validateRotation(chainPuzzles, 40);
 
 async function freePort() {
   const listener = net.createServer();
