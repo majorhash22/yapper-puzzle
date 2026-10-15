@@ -4,6 +4,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
 const rebusPuzzles = require('./puzzles');
+// Keep published days playable after switching the bank to the Re-Bus dataset.
+const legacyRebusPuzzles = require('./puzzles.json');
 const chainPuzzles = require('./chain-puzzles');
 const { initialRotation, selectPuzzles } = require('./schedule');
 
@@ -107,7 +109,8 @@ function ensureDay(gameId, key) {
 }
 
 function getPuzzle(gameId, id) {
-  return gameConfig(gameId)?.puzzles.find(p => p.id === id);
+  return gameConfig(gameId)?.puzzles.find(p => p.id === id) ||
+    (gameId === 'rebus' ? legacyRebusPuzzles.find(p => p.id === id) : undefined);
 }
 
 function normalizeAnswer(value) {
@@ -177,6 +180,7 @@ function publicPuzzle(gameId, puzzle, index) {
   return {
     id: puzzle.id,
     prompt: gameId === 'chain' ? chainPrompt(puzzle) : puzzle.prompt,
+    source: puzzle.source || null,
     number: index + 1,
     total: DAILY_COUNT,
     question: config.question,
@@ -353,6 +357,8 @@ function serveStatic(reqPath, res) {
     '.json': 'application/json; charset=utf-8',
     '.svg': 'image/svg+xml',
     '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.jpg': 'image/jpeg',
     '.webp': 'image/webp'
   };
   const noCache = ['.html', '.css', '.js'].includes(ext);

@@ -3,25 +3,31 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
+const crypto = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
 const { once } = require('node:events');
 const rebusPuzzles = require('./puzzles');
+const legacyRebusPuzzles = require('./puzzles.json');
+const rebusDataset = require('./rebus-puzzles.json');
+const { parseCsv, answersFor } = require('./scripts/import-rebus');
 const chainPuzzles = require('./chain-puzzles');
 const { initialRotation, selectPuzzles } = require('./schedule');
 
-function validateRotation(puzzles, daysToExhaust) {
+function validateRotation(puzzles) {
   const ids = puzzles.map(p => p.id);
   const used = new Set();
   let rotation = initialRotation({}, ids);
   let yesterday = [];
 
-  for (let day = 1; day <= daysToExhaust; day++) {
-    const key = `2026-10-${String(day).padStart(2, '0')}`;
+  for (let day = 1; day <= Math.ceil(puzzles.length / 5); day++) {
+    const key = new Date(Date.UTC(2026, 0, day)).toISOString().slice(0, 10);
     const result = selectPuzzles(rotation, ids, key, 5);
     assert.equal(new Set(result.puzzleIds).size, 5, 'A daily set must have five distinct puzzles');
     assert.ok(result.puzzleIds.every(id => !yesterday.includes(id)), 'No puzzle may repeat from the previous day');
-    assert.ok(result.puzzleIds.every(id => !used.has(id)), 'No puzzle may repeat before the complete bank is exhausted');
-    result.puzzleIds.forEach(id => used.add(id));
+    for (const id of result.puzzleIds) {
+      if (used.size < puzzles.length) assert.ok(!used.has(id), 'No puzzle may repeat before the complete bank is exhausted');
+      used.add(id);
+    }
     yesterday = result.puzzleIds;
     rotation = result.rotation;
   }
@@ -31,9 +37,22 @@ function validateRotation(puzzles, daysToExhaust) {
   assert.ok(recycled.puzzleIds.every(id => !yesterday.includes(id)), 'A recycled bank must still avoid yesterday’s puzzles');
 }
 
-assert.equal(rebusPuzzles.length, 35, 'Expected the existing 35 Rebus puzzles');
+assert.equal(rebusPuzzles.length, 743, 'The pinned dataset contains 743 original Rebus images');
+assert.equal(rebusDataset.sourceRows, 1354);
 assert.equal(new Set(rebusPuzzles.map(p => p.id)).size, rebusPuzzles.length, 'Rebus IDs must be unique');
-validateRotation(rebusPuzzles, 7);
+for (const puzzle of rebusPuzzles) {
+  assert.ok(puzzle.id.startsWith('rebus-dataset-'), 'Only dataset puzzles may enter new daily rotations');
+  const bytes = fs.readFileSync(path.join(__dirname, 'public', puzzle.image));
+  assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'), puzzle.sha256, `${puzzle.image} must match the upstream image`);
+  assert.match(puzzle.prompt, /<img class="rebus-image"/);
+}
+assert.deepEqual(parseCsv('img_url,answer,is_augmented\r\n"image.png","A comma, a ""quote""\nand a newline",False\r\n'), [
+  { img_url: 'image.png', answer: 'A comma, a "quote"\nand a newline', is_augmented: 'False' }
+]);
+assert.throws(() => parseCsv('img_url,answer,is_augmented\nimage.png,"unterminated,False'), /Unclosed/);
+assert.deepEqual(answersFor({ answer: 'Travel overseas|overseas travel' }, '1_4.png'), ['Travel overseas', 'overseas travel']);
+assert.deepEqual(answersFor({ answer: 'West Indies (west in d\'s)' }, 'puzzle26.gif'), ['West Indies']);
+validateRotation(rebusPuzzles);
 
 assert.equal(chainPuzzles.length, 200, 'Chain Reaction should contain 200 puzzles');
 assert.equal(new Set(chainPuzzles.map(p => p.id)).size, chainPuzzles.length, 'Chain Reaction IDs must be unique');
@@ -41,7 +60,7 @@ assert.equal(new Set(chainPuzzles.map(p => p.words.join('|').toLowerCase())).siz
 for (const puzzle of chainPuzzles) {
   assert.equal(puzzle.words.length, 4, `${puzzle.id} must contain four words`);
 }
-validateRotation(chainPuzzles, 40);
+validateRotation(chainPuzzles);
 
 async function freePort() {
   const listener = net.createServer();
@@ -100,8 +119,51 @@ async function stop(child) {
   await once(child, 'exit');
 }
 
+async function validatePublishedDay(dataDir, port) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: process.env.APP_TIMEZONE || 'America/Regina', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  const date = ['year', 'month', 'day'].map(type => parts.find(part => part.type === type).value).join('-');
+  const legacyIds = legacyRebusPuzzles.slice(0, 5).map(puzzle => puzzle.id);
+  // Include a dataset puzzle with two accepted answers to exercise the API too.
+  const puzzleIds = [...legacyIds.slice(0, 4), 'rebus-dataset-1-4'];
+  fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify({
+    users: {}, days: { [date]: { puzzleIds, players: {} } },
+    rotation: initialRotation({ [date]: { puzzleIds: legacyIds } }, legacyRebusPuzzles.map(puzzle => puzzle.id))
+  }));
+  let running;
+  try {
+    running = await launch(dataDir, port);
+    const player = await request(running.base, '/api/register', { displayName: 'Returning player' });
+    const state = await request(running.base, `/api/state?userId=${player.userId}&game=rebus`);
+    assert.equal(state.puzzle.id, legacyIds[0], 'An already published legacy day must stay fixed');
+    assert.equal(state.puzzle.prompt, legacyRebusPuzzles[0].prompt);
+    const solved = await request(running.base, '/api/answer', {
+      userId: player.userId, answer: legacyRebusPuzzles[0].answers[0], game: 'rebus'
+    });
+    assert.equal(solved.correct, true, 'Legacy answers must remain playable');
+    const skipped = await request(running.base, '/api/give-up', { userId: player.userId, game: 'rebus' });
+    assert.equal(skipped.answer, legacyRebusPuzzles[1].answers[0], 'Legacy Give Up must still reveal the answer');
+    await request(running.base, '/api/give-up', { userId: player.userId, game: 'rebus' });
+    await request(running.base, '/api/give-up', { userId: player.userId, game: 'rebus' });
+    const alternate = await request(running.base, '/api/answer', { userId: player.userId, game: 'rebus', answer: 'OVERSEAS travel!!!' });
+    assert.equal(alternate.correct, true, 'Dataset alternate answers must accept case and punctuation differences');
+    assert.equal(alternate.state.finished, true);
+    const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
+    assert.deepEqual(saved.days[date].puzzleIds, puzzleIds, 'The upgrade must not replace a published selection');
+    await stop(running.child);
+    running = await launch(dataDir, port);
+    const restored = await request(running.base, `/api/state?userId=${player.userId}&game=rebus`);
+    assert.equal(restored.finished, true, 'Legacy day results must survive a restart');
+    assert.equal(restored.totalScore, alternate.state.totalScore);
+  } finally {
+    if (running) await stop(running.child);
+  }
+}
+
 async function main() {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yappers-test-'));
+  const legacyDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yappers-legacy-test-'));
   const port = await freePort();
   let running;
 
@@ -118,10 +180,13 @@ async function main() {
     assert.notEqual(noVolume.status, 0, 'Railway must refuse to start without persistent storage');
     assert.match(noVolume.stderr, /needs a Railway volume/);
 
-    const originalIds = rebusPuzzles.map(p => p.id);
+    await validatePublishedDay(legacyDataDir, port);
+    const originalIds = legacyRebusPuzzles.map(p => p.id);
+    const oldDays = { '2026-01-01': { puzzleIds: originalIds.slice(0, 5), players: {} } };
     fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify({
       users: {},
-      days: { '2026-01-01': { puzzleIds: originalIds.slice(0, 5), players: {} } }
+      days: oldDays,
+      rotation: initialRotation(oldDays, originalIds)
     }));
 
     running = await launch(dataDir, port);
@@ -143,6 +208,17 @@ async function main() {
     const aliceRebus = await request(base, `/api/state?userId=${alice.userId}&game=rebus`);
     const bobRebus = await request(base, `/api/state?userId=${bob.userId}&game=rebus`);
     assert.equal(aliceRebus.puzzle.id, bobRebus.puzzle.id, 'Rebus daily puzzles must match across players');
+    assert.match(aliceRebus.puzzle.prompt, /<img class="rebus-image"/, 'New Rebus days must display dataset images');
+    assert.equal(aliceRebus.puzzle.answers, undefined, 'Public puzzles must not expose accepted answers');
+    assert.equal(aliceRebus.puzzle.hint, undefined, 'Public puzzles must not expose source explanations');
+    for (const [extension, contentType] of [['png', 'image/png'], ['gif', 'image/gif'], ['jpg', 'image/jpeg']]) {
+      const puzzle = rebusPuzzles.find(puzzle => puzzle.image.endsWith(`.${extension}`));
+      const image = await fetch(`${base}${puzzle.image}`);
+      assert.equal(image.status, 200, `${extension} dataset images must be served`);
+      assert.equal(image.headers.get('content-type'), contentType);
+      assert.equal(crypto.createHash('sha256').update(Buffer.from(await image.arrayBuffer())).digest('hex'), puzzle.sha256);
+    }
+    assert.equal((await fetch(`${base}/rebus-puzzles.json`)).status, 404, 'The answer bank must remain private');
 
     const aliceChain = await request(base, `/api/state?userId=${alice.userId}&game=chain`);
     const bobChain = await request(base, `/api/state?userId=${bob.userId}&game=chain`);
@@ -154,6 +230,18 @@ async function main() {
     assert.ok(saved.chainDays, 'Upgrade must add separate Chain Reaction day storage');
     assert.ok(saved.days[aliceRebus.date].puzzleIds.every(id => !originalIds.slice(0, 5).includes(id)),
       'First upgraded Rebus day must avoid already served puzzles');
+    assert.ok(saved.days[aliceRebus.date].puzzleIds.every(id => id.startsWith('rebus-dataset-')), 'New days must use only dataset puzzles');
+    assert.equal(saved.rotation.knownIds.length, rebusPuzzles.length, 'The old rotation must migrate to the dataset bank');
+    const wrongRebus = await request(base, '/api/answer', { userId: alice.userId, game: 'rebus', answer: 'definitely an incorrect answer' });
+    assert.equal(wrongRebus.correct, false);
+    const firstRebus = rebusPuzzles.find(puzzle => puzzle.id === aliceRebus.puzzle.id);
+    const solvedRebus = await request(base, '/api/answer', { userId: bob.userId, game: 'rebus', answer: firstRebus.answers[0] });
+    assert.equal(solvedRebus.correct, true, 'Image puzzle answers must earn points and advance');
+    assert.ok(solvedRebus.earned >= 100 && solvedRebus.earned <= 1000);
+    const secondRebus = rebusPuzzles.find(puzzle => puzzle.id === solvedRebus.state.puzzle.id);
+    const skippedRebus = await request(base, '/api/give-up', { userId: bob.userId, game: 'rebus' });
+    assert.equal(skippedRebus.answer, secondRebus.answers[0]);
+    assert.equal(skippedRebus.state.completed[1].score, 0);
 
     const wrong = await request(base, '/api/answer', {
       userId: alice.userId,
@@ -222,10 +310,11 @@ async function main() {
     const restoredChainly = await request(running.base, `/api/chainly/leaderboard?date=${dailyDate}`);
     assert.equal(restoredChainly.leaderboard[0].guesses, 6, 'Chainly standings must survive a restart');
 
-    console.log('Passed: Rebus, legacy Chain Reaction, Chainly leaderboard ordering and persistence, scoring, rotation, migration, and restart.');
+    console.log('Passed: 743 dataset images and checksums, alternate answers, image serving, Rebus scoring, legacy saved games, full rotation, migration, Chain Reaction, Chainly standings, and restart persistence.');
   } finally {
     if (running) await stop(running.child);
     fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(legacyDataDir, { recursive: true, force: true });
   }
 }
 

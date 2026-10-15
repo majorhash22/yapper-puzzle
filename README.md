@@ -19,7 +19,7 @@ Open <http://localhost:3000>. Use separate browsers or a private window to test 
 
 ## Put it on GitHub
 
-Extract the ZIP first. `package.json`, `server.js`, `railway.json`, `public/`, `schedule.js`, `puzzles.js`, and `puzzles.json` must all be at the **repository root**, not under an extra folder.
+Extract the ZIP first. Keep the project files at the **repository root**, not under an extra folder. Include `rebus-puzzles.json` and the complete `public/rebus/` image directory when deploying; `puzzles.json` is still needed for saved games from before the dataset upgrade.
 
 In VS Code, open the extracted `yappers-puzzle` folder and open its terminal. Create an empty GitHub repository named `yappers-puzzle`, then run (replace `YOUR_USERNAME`):
 
@@ -52,29 +52,51 @@ If the repository already exists, copy the extracted files into your existing cl
 - The score timer starts when a puzzle is first delivered and survives page refreshes. The UI does not show elapsed time.
 - The server stores player and daily game data in `game-data.json` on the attached volume. Enable Railway volume backups if you need recoverable history. A corrupt data file causes startup to fail rather than resetting scores.
 - Each browser keeps a random player ID in local storage. This is suitable for a friendly game; it is not a secure login or a cheat resistant competition.
-- The 35 included puzzles supply seven days of unique five-puzzle sets. To extend the rotation, add entries to `puzzles.json`; 150 puzzles supply 30 days before the bank must cycle. Already selected IDs for previous dates remain fixed in the saved game data.
+- New Rebus days use 743 original image puzzles from the Re-Bus dataset. This supplies 148 complete five-puzzle days before the bank cycles during day 149. Augmented versions are excluded to avoid replaying the same clue with a different background. Already selected IDs for previous dates remain fixed in the saved game data.
 - Keep existing IDs stable and never remove a puzzle while an active day may still reference it. New entries automatically join the current rotation. The first upgraded day respects previously saved days when initializing the rotation. A repeated puzzle already published for the current day stays in place so players' current games do not change mid-day.
 
 ## Puzzle dataset
 
-`puzzles.json` is the puzzle dataset. Each entry needs a unique lowercase ID, the rebus display as trusted HTML, and one or more accepted answers:
+Rebus uses a bundled snapshot of [TrishanuDas/rebus-dataset](https://huggingface.co/datasets/TrishanuDas/rebus-dataset), pinned to revision `12233c6790bb2edc929ad7822ae428483b5c842a`. `rebus-puzzles.json` contains the converted entries and provenance; `public/rebus/` contains all 743 original images (about 8.9 MB). Gameplay needs no Hugging Face account, API token, or external image requests.
+
+The importer reads `RebusPuzzlesFullDataset.csv`, selects only non-augmented rows, verifies each image against the repository's SHA-256 checksum, and preserves the source and difficulty. Pipe-separated answers become accepted variants. Explanatory notes are removed from answer text, with explicit corrections for ambiguous annotations. Answers remain server-side until Give Up reveals one.
+
+To reproduce the bundled snapshot, run:
+
+```bash
+npm run import:rebus
+npm test
+```
+
+This command needs internet access, reuses images with matching checksums, and writes the puzzle bank only after every image is available. To deliberately update the upstream version, change `REVISION` in `scripts/import-rebus.js` and review the resulting changes. Keep existing IDs stable while saved days reference them.
+
+Each converted entry under `puzzles` has this shape:
 
 ```json
 {
-  "id": "head-over-heels",
-  "prompt": "<div class=\"stack huge\"><span>HEAD</span><span class=\"gap-lg\">HEELS</span></div>",
-  "answers": ["head over heels"]
+  "id": "rebus-dataset-1-4",
+  "image": "/rebus/1_4.png",
+  "answers": ["Travel overseas", "overseas travel"],
+  "difficulty": "easy",
+  "source": "https://eslvault.com/free-printable-rebus-puzzles/",
+  "sha256": "<upstream image checksum>"
 }
 ```
 
-Place new entries inside the existing JSON array, separated by commas. IDs may contain lowercase letters, digits, and hyphens. Answers ignore capitalization, punctuation, and extra spaces. Add common reasonable answer variants to `answers`. Only include reviewed, trusted HTML in `prompt`; it is displayed directly in players' browsers. If your source is a CSV, spreadsheet, images, or a link to a puzzle collection, it needs conversion and answer review before adding it. For image puzzles, supply the image files and usage permission; the display template can then be adapted for images. Maintain at least 10 puzzles for five-puzzle days.
+`puzzles.js` builds the image display template from validated local paths. Answers ignore capitalization, punctuation, and extra spaces. The original 35 HTML puzzles remain in `puzzles.json` only for previously published days; they are excluded from new daily selections. An in-progress day keeps its original puzzles after upgrading, and the next new day uses the dataset.
+
+Dataset attribution, licensing notes, the Apache-2.0 text, and the original dataset card are preserved in [`datasets/rebus/`](datasets/rebus/NOTICE.md).
 
 ## Project files
 
 ```text
 public/       Browser UI
-puzzles.json  Editable rebus puzzle dataset
+rebus-puzzles.json  Pinned Re-Bus puzzle bank and provenance
+public/rebus/      Bundled original puzzle images
+puzzles.json  Legacy rebus puzzles for saved days
 puzzles.js    Dataset loader and validation
+scripts/import-rebus.js  Reproduce the Re-Bus import
+datasets/rebus/    Dataset attribution and upstream license information
 schedule.js   Shared daily selection and rotation
 server.js     Node server, scoring, daily state, leaderboard
 railway.json  Railway start command and healthcheck

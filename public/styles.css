@@ -89,6 +89,10 @@ button:disabled { opacity:.5; cursor:not-allowed; transform:none; }
 .puzzle-head { display:flex; justify-content:space-between; gap:16px; align-items:start; }
 .puzzle-head h2 { margin:5px 0 0; font-size:1.3rem; }
 .puzzle-visual { min-height:330px; display:flex; align-items:center; justify-content:center; margin:24px 0; border-radius:20px; border:1px dashed #3a4864; background:linear-gradient(180deg,#0e1729,#0a1120); overflow:hidden; padding:24px; text-align:center; }
+.rebus-image-frame { display:flex; align-items:center; justify-content:center; width:100%; min-width:0; min-height:240px; padding:12px; border-radius:12px; background:#fff; }
+.rebus-image { display:block; width:100%; max-width:560px; max-height:420px; height:auto; object-fit:contain; }
+.puzzle-credit { margin:-12px 0 20px; color:var(--muted); font-size:.78rem; }
+.puzzle-credit a { color:#b8a3ef; }
 .huge { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight:900; font-size:clamp(2.2rem,7vw,5rem); letter-spacing:.04em; }
 .mega { font-family: ui-monospace, monospace; font-weight:1000; font-size:clamp(5rem,16vw,11rem); line-height:.85; }
 .stack { display:flex; flex-direction:column; align-items:center; line-height:1; }

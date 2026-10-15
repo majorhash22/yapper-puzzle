@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "import:rebus": "node scripts/import-rebus.js",
     "test": "node tests.js && node chainly-tests.js"
   },
   "engines": {
