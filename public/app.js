@@ -146,7 +146,6 @@ function renderState(nextState) {
   $('puzzleNumber').textContent = `Puzzle ${state.puzzle.number} of ${state.puzzle.total}`;
   $('puzzleQuestion').textContent = state.puzzle.question;
   $('puzzleVisual').innerHTML = state.puzzle.prompt;
-  $('puzzleCredit').classList.toggle('hidden', !state.puzzle.source);
   $('answerInput').placeholder = state.puzzle.placeholder || 'Type your answer…';
   $('answerInput').value = '';
   $('answerMessage').textContent = '';
