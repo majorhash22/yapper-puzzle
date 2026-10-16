@@ -12,6 +12,30 @@ const gameView = $('gameView');
 const puzzleCard = $('puzzleCard');
 const finishedCard = $('finishedCard');
 const giveUpModal = $('giveUpModal');
+const puzzleVisual = $('puzzleVisual');
+
+// These deter ordinary copying and saving. A browser cannot prevent OS screenshots.
+function rebusPuzzleVisible() {
+  return currentGame === 'rebus' && !gameView.classList.contains('hidden') &&
+    !puzzleCard.classList.contains('hidden');
+}
+
+for (const eventName of ['contextmenu', 'dragstart', 'selectstart']) {
+  puzzleVisual.addEventListener(eventName, event => {
+    if (rebusPuzzleVisible()) event.preventDefault();
+  });
+}
+
+for (const eventName of ['copy', 'cut']) {
+  document.addEventListener(eventName, event => {
+    if (!rebusPuzzleVisible() || event.target?.closest?.('input, textarea, [contenteditable]')) return;
+    const selection = window.getSelection();
+    const includesPuzzle = puzzleVisual.contains(event.target) ||
+      Array.from({ length: selection?.rangeCount || 0 }, (_, index) => selection.getRangeAt(index))
+        .some(range => range.intersectsNode(puzzleVisual));
+    if (includesPuzzle) event.preventDefault();
+  });
+}
 
 const events = new EventSource('/api/events');
 events.addEventListener('leaderboard', event => {
@@ -118,6 +142,7 @@ function renderBreakdown() {
 function renderState(nextState) {
   state = nextState;
   currentGame = state.game;
+  puzzleVisual.classList.toggle('rebus-protected', currentGame === 'rebus');
   showGame();
 
   $('headerEyebrow').textContent = state.gameEyebrow;
@@ -145,7 +170,7 @@ function renderState(nextState) {
   puzzleCard.classList.remove('hidden');
   $('puzzleNumber').textContent = `Puzzle ${state.puzzle.number} of ${state.puzzle.total}`;
   $('puzzleQuestion').textContent = state.puzzle.question;
-  $('puzzleVisual').innerHTML = state.puzzle.prompt;
+  puzzleVisual.innerHTML = state.puzzle.prompt;
   $('answerInput').placeholder = state.puzzle.placeholder || 'Type your answer…';
   $('answerInput').value = '';
   $('answerMessage').textContent = '';
@@ -278,6 +303,9 @@ giveUpModal.addEventListener('click', e => {
 });
 
 document.addEventListener('keydown', e => {
+  if (rebusPuzzleVisible() && (e.ctrlKey || e.metaKey) && ['s', 'p'].includes(e.key.toLowerCase())) {
+    e.preventDefault();
+  }
   if (e.key === 'Escape') giveUpModal.classList.add('hidden');
 });
 

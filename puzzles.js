@@ -9,7 +9,7 @@ const puzzles = dataset.puzzles.map(puzzle => {
   }
   return {
     ...puzzle,
-    prompt: `<div class="rebus-image-frame"><img class="rebus-image" src="${puzzle.image}" alt="Rebus puzzle: decode the words, symbols, and their arrangement." /></div>`
+    prompt: `<div class="rebus-image-frame"><img class="rebus-image" draggable="false" src="${puzzle.image}" alt="Rebus puzzle: decode the words, symbols, and their arrangement." /></div>`
   };
 });
 

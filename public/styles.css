@@ -91,6 +91,8 @@ button:disabled { opacity:.5; cursor:not-allowed; transform:none; }
 .puzzle-visual { min-height:330px; display:flex; align-items:center; justify-content:center; margin:24px 0; border-radius:20px; border:1px dashed #3a4864; background:linear-gradient(180deg,#0e1729,#0a1120); overflow:hidden; padding:24px; text-align:center; }
 .rebus-image-frame { display:flex; align-items:center; justify-content:center; width:100%; min-width:0; min-height:240px; padding:12px; border-radius:12px; background:#fff; }
 .rebus-image { display:block; width:100%; max-width:560px; max-height:420px; height:auto; object-fit:contain; }
+.rebus-protected, .rebus-protected * { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+.rebus-protected img { -webkit-user-drag:none; pointer-events:none; }
 .huge { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight:900; font-size:clamp(2.2rem,7vw,5rem); letter-spacing:.04em; }
 .mega { font-family: ui-monospace, monospace; font-weight:1000; font-size:clamp(5rem,16vw,11rem); line-height:.85; }
 .stack { display:flex; flex-direction:column; align-items:center; line-height:1; }
@@ -154,6 +156,10 @@ button:disabled { opacity:.5; cursor:not-allowed; transform:none; }
 .modal p { color:#b6c2d2; line-height:1.55; }
 .modal-icon { font-size:2.2rem; }
 .modal-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:24px; }
+
+@media print {
+  .rebus-protected { visibility:hidden !important; }
+}
 
 @media (max-width: 900px) {
   .game-menu-grid, .game-grid { grid-template-columns:1fr; }
