@@ -48,8 +48,9 @@ If the repository already exists, copy the extracted files into your existing cl
 ## Settings and rules
 
 - The daily reset uses `America/Regina` by default. To change it, set `APP_TIMEZONE` in Railway's service variables to a valid IANA timezone, such as `America/Edmonton`.
-- Scores start at 1,000 and drop by 10 points per second; a correct answer never scores less than 100. Give Up scores zero. Maximum daily score is 5,000.
-- The score timer starts when a puzzle is first delivered and survives page refreshes. The UI does not show elapsed time.
+- Each Rebus puzzle starts at 1,000 points. Each wrong guess costs 100 points; a correct answer always earns at least 100. Give Up scores zero. Maximum daily score is 5,000. The legacy Chain Reaction API uses the same rules.
+- Time never affects points or leaderboard ranks. Wrong guesses persist across page refreshes and server restarts. Equal scores, solved counts, and completion counts share a rank. Blank or punctuation-only submissions do not count as guesses.
+- Existing published days move to the new scoring rules when loaded. Previously solved puzzles receive 1,000 points and skipped puzzles stay at zero, because older saves did not record wrong guesses. Puzzle selections and progress are preserved; historical days remain unchanged unless loaded.
 - The server stores player and daily game data in `game-data.json` on the attached volume. Enable Railway volume backups if you need recoverable history. A corrupt data file causes startup to fail rather than resetting scores.
 - Each browser keeps a random player ID in local storage. This is suitable for a friendly game; it is not a secure login or a cheat resistant competition.
 - Rebus deters ordinary image copying and saving: its puzzle area disables selection, dragging, the context menu, and supported mobile image callouts. Copy/cut operations involving the clue and save/print shortcuts are blocked while a Rebus puzzle is open, and clues are hidden in printed output. Answer input editing and Chainly retain their normal behavior. These browser controls cannot prevent screenshots, external capture tools, browser overrides, or downloading an image through developer tools.
@@ -84,7 +85,7 @@ Each converted entry under `puzzles` has this shape:
 }
 ```
 
-`puzzles.js` builds the image display template from validated local paths. Answers ignore capitalization, punctuation, and extra spaces. The original 35 HTML puzzles remain in `puzzles.json` only for previously published days; they are excluded from new daily selections. An in-progress day keeps its original puzzles after upgrading, and the next new day uses the dataset.
+`puzzles.js` builds the image display template from validated local paths. Rebus answers ignore capitalization, accents, punctuation, and all spacing: `robinhood`, `Robin Hood`, and `robin-hood` are equivalent. Close spelling mistakes receive a gentle hint without revealing the answer; they still count as wrong guesses. A successful solve shows the canonical answer. The original 35 HTML puzzles remain in `puzzles.json` only for previously published days; they are excluded from new daily selections. An in-progress day keeps its original puzzles after upgrading, and the next new day uses the dataset.
 
 Dataset attribution, licensing notes, the Apache-2.0 text, and the original dataset card are preserved in [`datasets/rebus/`](datasets/rebus/NOTICE.md).
 

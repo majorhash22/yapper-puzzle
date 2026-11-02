@@ -119,11 +119,126 @@ async function stop(child) {
   await once(child, 'exit');
 }
 
-async function validatePublishedDay(dataDir, port) {
+function today() {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: process.env.APP_TIMEZONE || 'America/Regina', year: 'numeric', month: '2-digit', day: '2-digit'
   }).formatToParts(new Date());
-  const date = ['year', 'month', 'day'].map(type => parts.find(part => part.type === type).value).join('-');
+  return ['year', 'month', 'day'].map(type => parts.find(part => part.type === type).value).join('-');
+}
+
+async function validateGuessScoring(dataDir, port) {
+  const date = today();
+  const puzzleIds = ['rebus-dataset-4-4', 'rebus-dataset-p2', 'rebus-dataset-1-4', ...legacyRebusPuzzles.slice(0, 2).map(p => p.id)];
+  const completed = puzzleIds.map(puzzleId => ({ puzzleId, status: 'solved', score: 100, elapsedMs: 90000 }));
+  const historicalDay = { puzzleIds, players: { slow: { currentIndex: 1, totalScore: 100, completed: completed.slice(0, 1) } } };
+  fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify({
+    users: {
+      slow: { displayName: 'Slow thinker' }, returning: { displayName: 'Returning player' },
+      alpha: { displayName: 'Alpha' }, zulu: { displayName: 'Zulu' }
+    },
+    days: {
+      '2000-01-01': historicalDay,
+      [date]: { puzzleIds, players: {
+        slow: { currentIndex: 0, startedAt: '2000-01-01T00:00:00Z', totalScore: 0, completed: [], finishedAt: null },
+        returning: { currentIndex: 2, startedAt: '2000-01-01T00:00:00Z', totalScore: 100, completed: [
+          completed[0], { puzzleId: puzzleIds[1], status: 'gave-up', score: 0, answer: 'split personality' }
+        ], finishedAt: null },
+        alpha: { currentIndex: 5, totalScore: 500, completed, finishedAt: '2000-01-02T00:00:00Z' },
+        zulu: { currentIndex: 5, totalScore: 500, completed, finishedAt: '2000-01-01T00:00:00Z' }
+      } }
+    }
+  }));
+  let running;
+  try {
+    running = await launch(dataDir, port);
+    let base = running.base;
+    const state = await request(base, '/api/state?userId=slow&game=rebus');
+    assert.equal(state.scoring.availablePoints, 1000, 'An old start timestamp must not reduce points');
+    assert.equal(state.startedAt, undefined, 'Rebus must not expose a scoring timer');
+    const returning = await request(base, '/api/state?userId=returning&game=rebus');
+    assert.equal(returning.totalScore, 1000, 'Timed scores must migrate to the same guess-based rules');
+    assert.equal(returning.puzzle.number, 3, 'Migration must preserve progress');
+    assert.equal(returning.completed[1].score, 0, 'Migration must preserve zero points for giving up');
+    const board = await request(base, '/api/leaderboard?game=rebus');
+    assert.deepEqual(board.leaderboard.slice(0, 2).map(row => [row.displayName, row.rank, row.score]), [
+      ['Alpha', 1, 5000], ['Zulu', 1, 5000]
+    ], 'Equal results must share a rank regardless of finish time');
+    assert.equal(board.leaderboard[2].rank, 3, 'The next distinct result must get its competition rank');
+
+    for (const [index, answer] of ['robinhood', ' RO BIN\tHO OD ', 'RÓBÍN-HÖÖD!!!', 'robin hood'].entries()) {
+      const player = await request(base, '/api/register', { displayName: `Spacing ${index}` });
+      const solved = await request(base, '/api/answer', { userId: player.userId, game: 'rebus', answer });
+      assert.equal(solved.correct, true, `${answer} must count as Robin Hood`);
+      assert.equal(solved.answer, 'Robin Hood', 'A correct answer should show its canonical spelling');
+      assert.equal(solved.earned, 1000, 'Spacing must not cost points');
+      assert.equal(solved.state.completed[0].wrongGuesses, 0);
+    }
+
+    for (const answer of ['', ' \t ', '!!!']) {
+      const response = await fetch(`${base}/api/answer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'slow', game: 'rebus', answer })
+      });
+      assert.equal(response.status, 400, 'Blank guesses must be rejected without a penalty');
+    }
+    const unchanged = await request(base, '/api/state?userId=slow&game=rebus');
+    assert.equal(unchanged.scoring.wrongGuesses, 0);
+
+    for (const [index, answer] of ['robin hod', 'robin xhood', 'robin hoot', 'robin ohod'].entries()) {
+      const close = await request(base, '/api/answer', { userId: 'slow', game: 'rebus', answer });
+      assert.equal(close.correct, false, 'A spelling hint must not accept a wrong answer');
+      assert.match(close.message, /Very close! Check the spelling/);
+      assert.equal(close.answer, undefined, 'Spelling hints must not reveal the answer');
+      assert.equal(close.scoring.wrongGuesses, index + 1);
+      assert.equal(close.scoring.availablePoints, 1000 - (index + 1) * 100);
+    }
+    const unrelated = await request(base, '/api/answer', { userId: 'slow', game: 'rebus', answer: 'hood robin' });
+    assert.doesNotMatch(unrelated.message, /Very close/, 'Reordered words must not match automatically');
+    assert.equal(unrelated.scoring.availablePoints, 500);
+    const savedBefore = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
+    assert.deepEqual(savedBefore.days['2000-01-01'], historicalDay, 'Unloaded historical results must stay unchanged');
+
+    await stop(running.child);
+    running = await launch(dataDir, port);
+    base = running.base;
+    const restored = await request(base, '/api/state?userId=slow&game=rebus');
+    assert.equal(restored.puzzle.id, puzzleIds[0], 'Wrong guesses must not advance the puzzle');
+    assert.equal(restored.scoring.wrongGuesses, 5, 'Wrong guesses must survive refreshes and restarts');
+    assert.equal(restored.scoring.availablePoints, 500, 'Migration must run only once');
+    const solved = await request(base, '/api/answer', { userId: 'slow', game: 'rebus', answer: 'robinhood' });
+    assert.equal(solved.earned, 500);
+    assert.equal(solved.elapsedMs, undefined, 'Elapsed time must not contribute to scores');
+    assert.equal(solved.state.completed[0].wrongGuesses, 5);
+    assert.equal(solved.state.scoring.availablePoints, 1000, 'Every new puzzle must start with full points');
+
+    for (let index = 0; index < 12; index++) {
+      const wrong = await request(base, '/api/answer', { userId: 'slow', game: 'rebus', answer: 'nope' });
+      assert.equal(wrong.scoring.availablePoints, Math.max(100, 900 - index * 100));
+    }
+    const minimum = await request(base, '/api/answer', { userId: 'slow', game: 'rebus', answer: 'splitpersonality' });
+    assert.equal(minimum.earned, 100, 'A solve must always earn at least 100 points');
+    assert.equal(minimum.state.totalScore, 600);
+    const alternate = await request(base, '/api/answer', { userId: 'slow', game: 'rebus', answer: 'OVERSEASTRAVEL' });
+    assert.equal(alternate.earned, 1000, 'Alternate answers must also ignore spaces');
+    await request(base, '/api/answer', { userId: 'slow', game: 'rebus', answer: 'nope' });
+    const skipped = await request(base, '/api/give-up', { userId: 'slow', game: 'rebus' });
+    assert.equal(skipped.state.completed[3].score, 0);
+    assert.equal(skipped.state.completed[3].wrongGuesses, 1);
+    assert.equal(skipped.state.scoring.availablePoints, 1000, 'Giving up must reset the next puzzle’s guesses');
+    const last = await request(base, '/api/answer', { userId: 'slow', game: 'rebus', answer: legacyRebusPuzzles[1].answers[0].replace(/\s/g, '') });
+    assert.equal(last.state.finished, true);
+    assert.equal(last.state.totalScore, 2600);
+    await stop(running.child);
+    running = await launch(dataDir, port);
+    const finished = await request(running.base, '/api/state?userId=slow&game=rebus');
+    assert.equal(finished.totalScore, 2600, 'Completed guess-based scores must survive restarts');
+  } finally {
+    if (running) await stop(running.child);
+  }
+}
+
+async function validatePublishedDay(dataDir, port) {
+  const date = today();
   const legacyIds = legacyRebusPuzzles.slice(0, 5).map(puzzle => puzzle.id);
   // Include a dataset puzzle with two accepted answers to exercise the API too.
   const puzzleIds = [...legacyIds.slice(0, 4), 'rebus-dataset-1-4'];
@@ -181,6 +296,7 @@ async function main() {
     assert.match(noVolume.stderr, /needs a Railway volume/);
 
     await validatePublishedDay(legacyDataDir, port);
+    await validateGuessScoring(legacyDataDir, port);
     const originalIds = legacyRebusPuzzles.map(p => p.id);
     const oldDays = { '2026-01-01': { puzzleIds: originalIds.slice(0, 5), players: {} } };
     fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify({
@@ -237,7 +353,7 @@ async function main() {
     const firstRebus = rebusPuzzles.find(puzzle => puzzle.id === aliceRebus.puzzle.id);
     const solvedRebus = await request(base, '/api/answer', { userId: bob.userId, game: 'rebus', answer: firstRebus.answers[0] });
     assert.equal(solvedRebus.correct, true, 'Image puzzle answers must earn points and advance');
-    assert.ok(solvedRebus.earned >= 100 && solvedRebus.earned <= 1000);
+    assert.equal(solvedRebus.earned, 1000);
     const secondRebus = rebusPuzzles.find(puzzle => puzzle.id === solvedRebus.state.puzzle.id);
     const skippedRebus = await request(base, '/api/give-up', { userId: bob.userId, game: 'rebus' });
     assert.equal(skippedRebus.answer, secondRebus.answers[0]);
@@ -306,11 +422,12 @@ async function main() {
 
     const restoredRebus = await request(running.base, `/api/state?userId=${alice.userId}&game=rebus`);
     assert.equal(restoredRebus.puzzle.id, aliceRebus.puzzle.id, 'Rebus progress must remain independent and persistent');
+    assert.equal(restoredRebus.scoring.wrongGuesses, 1, 'Rebus wrong guesses must remain independent and persistent');
 
     const restoredChainly = await request(running.base, `/api/chainly/leaderboard?date=${dailyDate}`);
     assert.equal(restoredChainly.leaderboard[0].guesses, 6, 'Chainly standings must survive a restart');
 
-    console.log('Passed: 743 dataset images and checksums, alternate answers, image serving, Rebus scoring, legacy saved games, full rotation, migration, Chain Reaction, Chainly standings, and restart persistence.');
+    console.log('Passed: 743 dataset images and checksums, flexible Rebus spacing, spelling hints, guess-based scores, score floors, tied ranks, saved-game migration, full rotation, Chain Reaction, Chainly standings, and restart persistence.');
   } finally {
     if (running) await stop(running.child);
     fs.rmSync(dataDir, { recursive: true, force: true });

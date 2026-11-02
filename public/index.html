@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#111827" />
   <title>Yappers Puzzle</title>
-  <link rel="stylesheet" href="/styles.css?v=7" />
+  <link rel="stylesheet" href="/styles.css?v=8" />
 </head>
 <body>
   <main class="shell">
@@ -18,7 +18,7 @@
     </header>
 
     <section id="joinView" class="card join-card">
-      <div class="badge">⚡ Speed matters</div>
+      <div class="badge">🧩 Take your time</div>
       <h2>Pick a game. Chase the leaderboard.</h2>
       <p>Enter your player name to play the daily Rebus challenge and its live leaderboard. Chainly is also ready to play in this browser.</p>
       <form id="joinForm" class="join-form">
@@ -37,7 +37,7 @@
         <div>
           <div class="eyebrow">CHOOSE TODAY'S GAME</div>
           <h2>Ready, <span id="menuPlayerName"></span>?</h2>
-          <p class="muted-copy">Rebus has five speed-scored puzzles per day. Chainly has one seven-word chain, with the fewest guesses winning.</p>
+          <p class="muted-copy">Rebus has five puzzles per day. Fewer wrong guesses earn more points, and you can take your time. Chainly has one seven-word chain, with the fewest guesses winning.</p>
         </div>
         <button id="switchPlayerButton" class="secondary compact" type="button">Switch player</button>
       </div>
@@ -93,8 +93,11 @@
 
           <div id="puzzleVisual" class="puzzle-visual" aria-label="Daily puzzle"></div>
 
+          <p id="scoringRules" class="muted-copy scoring-rules"></p>
+          <p id="guessStatus" class="guess-status" role="status"></p>
+          <p id="answerHelp" class="muted-copy answer-help"></p>
           <form id="answerForm" class="answer-form">
-            <input id="answerInput" autocomplete="off" placeholder="Type your answer…" required />
+            <input id="answerInput" autocomplete="off" placeholder="Type your answer…" aria-describedby="answerHelp guessStatus" required />
             <button class="primary" type="submit">Submit</button>
           </form>
           <div class="action-row">
@@ -140,6 +143,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=7"></script>
+  <script src="/app.js?v=8"></script>
 </body>
 </html>

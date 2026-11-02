@@ -133,10 +133,17 @@ function renderBreakdown() {
   const root = $('dailyBreakdown');
   root.innerHTML = (state.completed || []).map((item, i) => `
     <div class="breakdown-row">
-      <span>Puzzle ${i + 1} · ${item.status === 'solved' ? 'Solved' : `Gave up — ${escapeHtml(item.answer || '')}`}</span>
+      <span>Puzzle ${i + 1} · ${item.status === 'solved' ? 'Solved' : `Gave up — ${escapeHtml(item.answer || '')}`} · ${item.wrongGuesses || 0} wrong guesses</span>
       <strong>${item.score} pts</strong>
     </div>
   `).join('');
+}
+
+function renderScoring(scoring) {
+  if (!scoring) return;
+  const { wrongGuesses, availablePoints, maxPoints, wrongGuessPenalty, minPoints } = scoring;
+  $('scoringRules').textContent = `Take your time. Start at ${maxPoints.toLocaleString()} points; each wrong guess costs ${wrongGuessPenalty}, down to ${minPoints}. Give Up earns 0.`;
+  $('guessStatus').textContent = `${availablePoints.toLocaleString()} points available · ${wrongGuesses} wrong ${wrongGuesses === 1 ? 'guess' : 'guesses'}`;
 }
 
 function renderState(nextState) {
@@ -170,6 +177,10 @@ function renderState(nextState) {
   puzzleCard.classList.remove('hidden');
   $('puzzleNumber').textContent = `Puzzle ${state.puzzle.number} of ${state.puzzle.total}`;
   $('puzzleQuestion').textContent = state.puzzle.question;
+  renderScoring(state.scoring);
+  $('answerHelp').textContent = currentGame === 'rebus'
+    ? 'Spaces and punctuation do not matter. “robinhood” counts as “robin hood”.'
+    : 'Enter the two missing words in order, separated by a space or comma.';
   puzzleVisual.innerHTML = state.puzzle.prompt;
   $('answerInput').placeholder = state.puzzle.placeholder || 'Type your answer…';
   $('answerInput').value = '';
@@ -265,9 +276,11 @@ $('answerForm').addEventListener('submit', async e => {
     });
     if (!data.correct) {
       $('answerMessage').textContent = data.message;
+      state.scoring = data.scoring;
+      renderScoring(data.scoring);
       $('answerInput').select();
     } else {
-      flashResult(`Correct! +${data.earned} points.`);
+      flashResult(`Correct! “${data.answer}” · +${data.earned} points.`);
       renderState(data.state);
     }
   } catch (err) {

@@ -13,8 +13,9 @@ const PORT = Number(process.env.PORT || 3000);
 const APP_TIMEZONE = process.env.APP_TIMEZONE || 'America/Regina';
 const DAILY_COUNT = 5;
 const MAX_SCORE = 1000;
-const POINTS_LOST_PER_SECOND = 10;
+const POINTS_LOST_PER_WRONG_GUESS = 100;
 const MIN_SOLVED_SCORE = 100;
+const SCORING_VERSION = 'guesses-v1';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'game-data.json');
@@ -100,11 +101,26 @@ function ensureDay(gameId, key) {
     const rotation = db[config.rotationField] || initialRotation(days, ids);
     const result = selectPuzzles(rotation, ids, key, DAILY_COUNT);
     db[config.rotationField] = result.rotation;
-    days[key] = { puzzleIds: result.puzzleIds, players: {} };
+    days[key] = { puzzleIds: result.puzzleIds, players: {}, scoringVersion: SCORING_VERSION };
     saveDb();
   }
 
   if (!days[key].players || typeof days[key].players !== 'object') days[key].players = {};
+  if (days[key].scoringVersion !== SCORING_VERSION) {
+    // Old games never recorded wrong guesses. Forgive those unknown guesses so
+    // everyone on an already published day uses the same untimed scoring rules.
+    for (const player of Object.values(days[key].players)) {
+      player.wrongGuesses = 0;
+      delete player.startedAt;
+      for (const result of player.completed) {
+        result.wrongGuesses = 0;
+        result.score = result.status === 'solved' ? MAX_SCORE : 0;
+      }
+      player.totalScore = player.completed.reduce((sum, result) => sum + result.score, 0);
+    }
+    days[key].scoringVersion = SCORING_VERSION;
+    saveDb();
+  }
   return days[key];
 }
 
@@ -115,10 +131,15 @@ function getPuzzle(gameId, id) {
 
 function normalizeAnswer(value) {
   return String(value || '').toLowerCase().normalize('NFKD')
+    .replace(/\p{M}/gu, '')
     .replace(/[’']/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function rebusAnswerKey(value) {
+  return normalizeAnswer(value).replace(/\s/g, '');
 }
 
 function chainMiddleWords(puzzle) {
@@ -130,7 +151,37 @@ function answerMatches(gameId, puzzle, answer) {
   if (gameId === 'chain') {
     return normalized === normalizeAnswer(chainMiddleWords(puzzle).join(' '));
   }
-  return puzzle.answers.some(candidate => normalizeAnswer(candidate) === normalized);
+  const key = rebusAnswerKey(answer);
+  return Boolean(key) && puzzle.answers.some(candidate => rebusAnswerKey(candidate) === key);
+}
+
+function oneEditApart(guess, answer) {
+  if (Math.abs(guess.length - answer.length) > 1) return false;
+  let index = 0;
+  while (index < Math.min(guess.length, answer.length) && guess[index] === answer[index]) index++;
+  if (guess.length === answer.length) {
+    return guess.slice(index + 1) === answer.slice(index + 1) ||
+      (guess[index] === answer[index + 1] && guess[index + 1] === answer[index] &&
+        guess.slice(index + 2) === answer.slice(index + 2));
+  }
+  return guess.length > answer.length
+    ? guess.slice(index + 1) === answer.slice(index)
+    : guess.slice(index) === answer.slice(index + 1);
+}
+
+function closeRebusAnswer(puzzle, answer) {
+  const guess = rebusAnswerKey(answer);
+  return guess.length >= 5 && puzzle.answers.some(candidate => oneEditApart(guess, rebusAnswerKey(candidate)));
+}
+
+function scoringFor(player) {
+  return {
+    wrongGuesses: player.wrongGuesses,
+    availablePoints: Math.max(MIN_SOLVED_SCORE, MAX_SCORE - player.wrongGuesses * POINTS_LOST_PER_WRONG_GUESS),
+    maxPoints: MAX_SCORE,
+    wrongGuessPenalty: POINTS_LOST_PER_WRONG_GUESS,
+    minPoints: MIN_SOLVED_SCORE
+  };
 }
 
 function canonicalAnswer(gameId, puzzle) {
@@ -147,11 +198,12 @@ function ensurePlayer(userId, key, gameId) {
   if (!day.players[userId]) {
     day.players[userId] = {
       currentIndex: 0,
-      startedAt: null,
+      wrongGuesses: 0,
       totalScore: 0,
       completed: [],
       finishedAt: null
     };
+    saveDb();
   }
   return day.players[userId];
 }
@@ -190,21 +242,20 @@ function publicPuzzle(gameId, puzzle, index) {
 
 function leaderboardFor(key, gameId) {
   const day = ensureDay(gameId, key);
-  return Object.entries(day.players).map(([userId, player]) => ({
+  const compareStanding = (a, b) => b.score - a.score || b.solved - a.solved || b.completed - a.completed;
+  const rows = Object.entries(day.players).map(([userId, player]) => ({
     userId,
     displayName: db.users[userId]?.displayName || 'Anonymous',
     score: player.totalScore,
     solved: player.completed.filter(x => x.status === 'solved').length,
     completed: player.completed.length,
     finishedAt: player.finishedAt
-  })).sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    if (b.solved !== a.solved) return b.solved - a.solved;
-    if (a.completed !== b.completed) return b.completed - a.completed;
-    const af = a.finishedAt ? new Date(a.finishedAt).getTime() : Infinity;
-    const bf = b.finishedAt ? new Date(b.finishedAt).getTime() : Infinity;
-    return af - bf;
-  }).slice(0, 100).map((row, i) => ({ ...row, rank: i + 1 }));
+  })).sort((a, b) => compareStanding(a, b) || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId));
+  let rank = 1;
+  return rows.slice(0, 100).map((row, index) => {
+    if (index > 0 && compareStanding(row, rows[index - 1]) !== 0) rank = index + 1;
+    return { ...row, rank };
+  });
 }
 
 function gameSummary(userId, gameId, key) {
@@ -258,18 +309,13 @@ function getState(userId, gameId) {
     return { ...base, finished: true };
   }
 
-  if (!player.startedAt) {
-    player.startedAt = new Date().toISOString();
-    saveDb();
-  }
-
   const puzzle = getPuzzle(gameId, day.puzzleIds[player.currentIndex]);
   if (!puzzle) throw new Error(`Missing ${gameId} puzzle referenced by saved day.`);
 
   return {
     ...base,
     finished: false,
-    startedAt: player.startedAt,
+    scoring: scoringFor(player),
     puzzle: publicPuzzle(gameId, puzzle, player.currentIndex)
   };
 }
@@ -487,31 +533,37 @@ async function handleApi(req, res, url) {
       return json(res, 200, { correct: true, state: getState(userId, gameId) });
     }
 
-    if (!player.startedAt) player.startedAt = new Date().toISOString();
+    if (!normalizeAnswer(answer)) return json(res, 400, { error: 'Please enter an answer.' });
     const puzzle = getPuzzle(gameId, day.puzzleIds[player.currentIndex]);
     if (!answerMatches(gameId, puzzle, answer)) {
+      player.wrongGuesses += 1;
       saveDb();
-      return json(res, 200, { correct: false, message: 'Not quite. Try again or give up.' });
+      return json(res, 200, {
+        correct: false,
+        message: gameId === 'rebus' && closeRebusAnswer(puzzle, answer)
+          ? 'Very close! Check the spelling. Spaces and punctuation do not matter.'
+          : 'Not quite. Try again or give up.',
+        scoring: scoringFor(player)
+      });
     }
 
     const solvedAt = new Date();
-    const elapsedMs = Math.max(0, solvedAt.getTime() - new Date(player.startedAt).getTime());
-    const score = Math.max(MIN_SOLVED_SCORE, MAX_SCORE - Math.floor((elapsedMs / 1000) * POINTS_LOST_PER_SECOND));
+    const score = scoringFor(player).availablePoints;
 
     player.completed.push({
       puzzleId: puzzle.id,
       status: 'solved',
       score,
-      elapsedMs,
+      wrongGuesses: player.wrongGuesses,
       completedAt: solvedAt.toISOString()
     });
     player.totalScore += score;
     player.currentIndex += 1;
-    player.startedAt = player.currentIndex < DAILY_COUNT ? solvedAt.toISOString() : null;
+    player.wrongGuesses = 0;
     if (player.currentIndex >= DAILY_COUNT) player.finishedAt = solvedAt.toISOString();
 
     saveDb();
-    const payload = { correct: true, earned: score, elapsedMs, state: getState(userId, gameId) };
+    const payload = { correct: true, earned: score, answer: canonicalAnswer(gameId, puzzle), state: getState(userId, gameId) };
     json(res, 200, payload);
     sendLeaderboard(gameId);
     return;
@@ -533,19 +585,18 @@ async function handleApi(req, res, url) {
 
     const puzzle = getPuzzle(gameId, day.puzzleIds[player.currentIndex]);
     const now = new Date();
-    const elapsedMs = player.startedAt ? Math.max(0, now.getTime() - new Date(player.startedAt).getTime()) : 0;
     const revealedAnswer = canonicalAnswer(gameId, puzzle);
 
     player.completed.push({
       puzzleId: puzzle.id,
       status: 'gave-up',
       score: 0,
-      elapsedMs,
+      wrongGuesses: player.wrongGuesses,
       answer: revealedAnswer,
       completedAt: now.toISOString()
     });
     player.currentIndex += 1;
-    player.startedAt = player.currentIndex < DAILY_COUNT ? now.toISOString() : null;
+    player.wrongGuesses = 0;
     if (player.currentIndex >= DAILY_COUNT) player.finishedAt = now.toISOString();
 
     saveDb();
