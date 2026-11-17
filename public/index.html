@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#111827" />
   <title>Yappers Puzzle</title>
-  <link rel="stylesheet" href="/styles.css?v=8" />
+  <link rel="stylesheet" href="/styles.css?v=9" />
 </head>
 <body>
   <main class="shell">
@@ -14,13 +14,13 @@
         <div class="eyebrow" id="headerEyebrow">YAPPERS DAILY GAMES</div>
         <h1 id="headerTitle">Yappers Puzzle</h1>
       </div>
-      <div class="today-pill" id="todayPill">Rebus + Chainly daily</div>
+      <div class="today-pill" id="todayPill">Three daily games</div>
     </header>
 
     <section id="joinView" class="card join-card">
       <div class="badge">🧩 Take your time</div>
       <h2>Pick a game. Chase the leaderboard.</h2>
-      <p>Enter your player name to play the daily Rebus challenge and its live leaderboard. Chainly is also ready to play in this browser.</p>
+      <p>Enter your player name for Rebus, Chainly, and Trivia Tower. A different kind of challenge, every day.</p>
       <form id="joinForm" class="join-form">
         <label for="displayName">Player name</label>
         <div class="row">
@@ -37,7 +37,7 @@
         <div>
           <div class="eyebrow">CHOOSE TODAY'S GAME</div>
           <h2>Ready, <span id="menuPlayerName"></span>?</h2>
-          <p class="muted-copy">Rebus has five puzzles per day. Fewer wrong guesses earn more points, and you can take your time. Chainly has one seven-word chain, with the fewest guesses winning.</p>
+          <p class="muted-copy">Decode a Rebus, connect a Chainly, or build a Trivia Tower. Take your time and make today’s leaderboard.</p>
         </div>
         <button id="switchPlayerButton" class="secondary compact" type="button">Switch player</button>
       </div>
@@ -51,6 +51,16 @@
           <div class="mini-puzzle"><span>HEAD</span><span class="mini-gap">HEELS</span></div>
           <div class="game-status" id="rebusStatus"></div>
           <button class="primary game-select" data-game="rebus" id="rebusPlayButton" type="button">Play Rebus</button>
+        </article>
+
+        <article class="card game-menu-card tower-menu-card">
+          <div class="game-icon">▥</div>
+          <div class="eyebrow">DAILY RANKING CHALLENGE</div>
+          <h3>Trivia Tower</h3>
+          <p>Six things. One correct order. Rank them from smallest to biggest, earliest to latest, and more.</p>
+          <div class="mini-tower" aria-label="A colorful tower growing from bottom to top"><span>MOST</span><span>↑</span><span>LEAST</span></div>
+          <div class="game-status" id="towerStatus"></div>
+          <a class="primary tower-menu-link" id="towerPlayButton" href="/tower/index.html">Play Trivia Tower</a>
         </article>
 
         <article class="card game-menu-card chain-menu-card">
@@ -143,6 +153,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=8"></script>
+  <script src="/app.js?v=9"></script>
 </body>
 </html>

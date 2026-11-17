@@ -1,5 +1,17 @@
 # Yappers Puzzle
 
+## Trivia Tower daily rankings
+
+Open `/tower/index.html` from the game menu. Every player receives the same daily six-item question and shuffled tower, using the existing `APP_TIMEZONE` daily reset and player account. The layout uses colorful rows in two rounded towers: the player's ranking and, after submission, the correct answer. The least/smallest/earliest item belongs at the bottom (position 1); the most/largest/latest belongs at the top (position 6).
+
+Players can drag rows, tap the up/down buttons, or focus a row and press the arrow keys. Drafts save in this browser separately for each player and daily question. **Lock in** submits the entire order once. Every exact placement earns **100 points**, independently of all other placements, for a maximum of **600**. Time never affects scoring. All six answers, their values, and reference links appear after submission. The server calculates scores, validates all six item IDs, rejects stale days, and preserves locked results across refreshes and restarts. Equal scores share a leaderboard rank; standings update live.
+
+`trivia-tower-puzzles.js` contains **100 distinct authored questions across 14 categories**, with six distinct values in each and explicit conventions for measurements, release regions, and approximate quantities. It is server-side; neither answer values nor answer-order IDs are served before submission. Item IDs are label hashes rather than position numbers. The bank is bundled, so gameplay requires no external trivia service or API key. Sources are reference links, not runtime dependencies.
+
+**Questions never repeat.** `towerDays` in the existing persistent game-data file records every published question ID, daily shuffle, and submitted score. Selection draws randomly only from IDs that have never appeared. When all 100 have been published, later days display an exhausted-bank message instead of recycling questions. Add questions with new stable IDs to resume on the next unpublished daily selection. Keep existing IDs and facts stable, and retain the persistent volume and its history when deploying. This is 100 unique daily towers, one per day.
+
+`tower-tests.js` checks the complete nonrepeating bank, exhaustion, additions, private answer data, scoring above incorrect lower rows, a single immutable submission, invalid and stale requests, live updates, shared daily state, and restart persistence. It runs as part of `npm test` alongside the existing Rebus and Chainly checks.
+
 ## Chainly daily word chain
 
 The menu opens `public/chainly/index.html` for a seven-word puzzle each local calendar day. Its five hidden words, hints, keyboard controls, and guess count are stored in the browser. The daily leaderboard uses the same player names, persistent Railway volume, and live updates as Rebus. Solved chains rank by fewest guesses; revealed chains appear last. Players can join from Chainly or reuse their Rebus name. Network trouble does not interrupt the puzzle, and refreshing retries the locally saved result. The legacy Chain Reaction API and saved data remain available for compatibility.

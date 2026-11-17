@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#181425" />
+  <title>Trivia Tower · Yappers Puzzle</title>
+  <link rel="stylesheet" href="/styles.css?v=9" />
+  <link rel="stylesheet" href="/tower/styles.css?v=1" />
+</head>
+<body class="tower-page">
+  <main class="tower-shell">
+    <header class="tower-topbar">
+      <a class="back-link" href="/">← All games</a>
+      <div class="tower-wordmark"><span aria-hidden="true">▥</span> TRIVIA TOWER</div>
+      <span id="dailyDate" class="daily-date">One tower. Every day.</span>
+    </header>
+
+    <section id="joinCard" class="card tower-join hidden">
+      <div class="eyebrow">YOUR DAILY KNOWLEDGE CLIMB</div>
+      <h1>Welcome to Trivia Tower.</h1>
+      <p>Six things. One correct order. Enter your player name to build today’s tower.</p>
+      <form id="towerJoinForm">
+        <label for="towerName">Player name</label>
+        <div class="row"><input id="towerName" minlength="2" maxlength="24" autocomplete="nickname" required /><button class="primary" type="submit">Let’s build</button></div>
+      </form>
+    </section>
+
+    <p id="pageMessage" class="page-message" role="status">Getting today’s tower ready…</p>
+    <button id="retryButton" class="secondary hidden" type="button">Try again</button>
+
+    <section id="towerGame" class="hidden" aria-labelledby="towerHeading">
+      <div class="tower-intro">
+        <div class="eyebrow">THE DAILY RANKING CHALLENGE</div>
+        <h1 id="towerHeading">Build your way to the top.</h1>
+        <p>Start small at the bottom. Go big at the top.</p>
+      </div>
+
+      <div class="tower-stage">
+        <section class="tower-frame player-frame" aria-labelledby="yourTowerHeading">
+          <header class="tower-cap"><div class="rainbow-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div><h2 id="yourTowerHeading">Your tower</h2><span id="towerPlayerName"></span></header>
+          <div class="tower-edge"><span>TOP · 6</span><strong id="yourHighLabel"></strong></div>
+          <ol id="playerTower" class="tower-stack" reversed aria-label="Your ranking, highest at the top"></ol>
+          <div class="tower-edge bottom-edge"><span>BOTTOM · 1</span><strong id="yourLowLabel"></strong></div>
+        </section>
+
+        <section class="tower-center" aria-labelledby="questionTitle">
+          <div class="question-card">
+            <span id="questionCategory" class="tower-category"></span>
+            <div class="rainbow-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <h2 id="questionTitle"></h2>
+            <p id="questionInstructions"></p>
+            <p id="questionNote" class="question-note"></p>
+          </div>
+          <div id="buildGuide" class="build-guide"><span aria-hidden="true">↑</span><p>Build from<br /><strong>bottom to top</strong></p></div>
+          <div class="tower-score"><span id="scoreLabel">UP FOR GRABS</span><strong id="towerScore">600</strong><span id="scoreDetail">100 points per correct placement</span></div>
+          <button id="lockButton" class="lock-button" type="button">Lock in my tower <span aria-hidden="true">↗</span></button>
+          <p id="moveHelp" class="move-help">Drag the rows or use ↑ ↓ to move them. Take your time. You get one submission.</p>
+          <p id="towerFeedback" class="tower-feedback" role="status"></p>
+          <button id="refreshButton" class="secondary hidden" type="button">Load today’s tower</button>
+        </section>
+
+        <section class="tower-frame answer-frame" aria-labelledby="answersHeading">
+          <header class="tower-cap"><div class="rainbow-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><h2 id="answersHeading">Correct answers</h2><span id="answerSubtitle">Revealed when you lock in</span></header>
+          <div class="tower-edge"><span>TOP · 6</span><strong id="answerHighLabel"></strong></div>
+          <ol id="answerTower" class="tower-stack" reversed aria-label="Correct ranking, highest at the top"></ol>
+          <div class="tower-edge bottom-edge"><span>BOTTOM · 1</span><strong id="answerLowLabel"></strong></div>
+        </section>
+      </div>
+
+      <section id="resultDetails" class="result-details hidden" aria-labelledby="resultTitle">
+        <div><div class="eyebrow">TODAY’S CLIMB</div><h2 id="resultTitle"></h2><p id="resultCopy"></p><p id="resetCopy" class="muted-copy"></p></div>
+        <div id="factSources" class="fact-sources"></div>
+      </section>
+      <section class="tower-leaderboard card" aria-labelledby="towerLeaderboardHeading">
+        <div class="leaderboard-head"><div><div class="eyebrow">LIVE · TODAY</div><h2 id="towerLeaderboardHeading">The daily climbers</h2></div><span class="live-dot" title="Live updates"></span></div>
+        <div id="towerLeaderboard" class="leaderboard"></div>
+      </section>
+    </section>
+
+    <section id="exhaustedCard" class="card exhausted-card hidden">
+      <div class="eyebrow">EVERY TOWER IS A FIRST</div><h1>You’ve reached the summit.</h1>
+      <p>All 100 challenges have appeared. New towers will be available when more questions are added.</p>
+      <a class="back-link" href="/">Explore the other daily games →</a>
+    </section>
+    <footer class="tower-footer">A little knowledge. A little instinct. A new climb every day.</footer>
+  </main>
+  <script src="/tower/script.js?v=1"></script>
+</body>
+</html>

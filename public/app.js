@@ -72,7 +72,7 @@ function hideAllViews() {
 function resetHeader() {
   $('headerEyebrow').textContent = 'YAPPERS DAILY GAMES';
   $('headerTitle').textContent = 'Yappers Puzzle';
-  $('todayPill').textContent = menuState?.date ? `${menuState.date} · Rebus + Chainly` : 'Rebus + Chainly daily';
+  $('todayPill').textContent = menuState?.date ? `${menuState.date} · 3 daily games` : 'Three daily games';
 }
 
 function showJoin() {
@@ -98,11 +98,12 @@ function renderMenu(nextMenu) {
     if (!status || !button) continue;
 
     status.innerHTML = `
-      <span><strong>${game.completed}/5</strong> completed</span>
+      <span><strong>${game.completed}/${game.total || 5}</strong> completed</span>
       <span><strong>${Number(game.score || 0).toLocaleString()}</strong> pts</span>
     `;
 
-    if (game.finished) button.textContent = 'View results';
+    if (game.exhausted) button.textContent = 'All towers explored';
+    else if (game.finished) button.textContent = 'View results';
     else if (game.completed > 0) button.textContent = `Continue ${game.label}`;
     else button.textContent = `Play ${game.label}`;
   }

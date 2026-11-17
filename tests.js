@@ -319,7 +319,7 @@ async function main() {
     const alice = await request(base, '/api/register', { displayName: 'Alice' });
     const bob = await request(base, '/api/register', { displayName: 'Bob' });
     assert.notEqual(alice.userId, bob.userId);
-    assert.equal(alice.menu.games.length, 2, 'Menu should return both games');
+    assert.equal(alice.menu.games.length, 3, 'Menu should return Rebus, legacy Chain Reaction, and Trivia Tower');
 
     const aliceRebus = await request(base, `/api/state?userId=${alice.userId}&game=rebus`);
     const bobRebus = await request(base, `/api/state?userId=${bob.userId}&game=rebus`);

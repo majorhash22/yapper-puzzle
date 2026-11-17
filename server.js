@@ -8,6 +8,7 @@ const rebusPuzzles = require('./puzzles');
 const legacyRebusPuzzles = require('./puzzles.json');
 const chainPuzzles = require('./chain-puzzles');
 const { initialRotation, selectPuzzles } = require('./schedule');
+const tower = require('./trivia-tower');
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_TIMEZONE = process.env.APP_TIMEZONE || 'America/Regina';
@@ -61,9 +62,10 @@ function loadDb() {
     if (!parsed.days || typeof parsed.days !== 'object') parsed.days = {};
     if (!parsed.chainDays || typeof parsed.chainDays !== 'object') parsed.chainDays = {};
     if (!parsed.chainlyDays || typeof parsed.chainlyDays !== 'object') parsed.chainlyDays = {};
+    if (!parsed.towerDays || typeof parsed.towerDays !== 'object') parsed.towerDays = {};
     return parsed;
   }
-  return { users: {}, days: {}, chainDays: {}, chainlyDays: {} };
+  return { users: {}, days: {}, chainDays: {}, chainlyDays: {}, towerDays: {} };
 }
 
 function saveDb() {
@@ -281,8 +283,59 @@ function menuFor(userId) {
     date: key,
     timeZone: APP_TIMEZONE,
     displayName: user.displayName,
-    games: Object.keys(GAME_CONFIGS).map(gameId => gameSummary(userId, gameId, key))
+    games: [...Object.keys(GAME_CONFIGS).map(gameId => gameSummary(userId, gameId, key)), towerSummary(userId, key)]
   };
+}
+
+function towerDay(key) {
+  const existing = db.towerDays[key];
+  const day = tower.ensureTowerDay(db.towerDays, key);
+  if (!existing) saveDb();
+  return day;
+}
+
+function towerSummary(userId, key) {
+  const day = towerDay(key);
+  const player = day.players[userId];
+  return {
+    id: 'tower', label: 'Trivia Tower', description: 'Rank six things from bottom to top.',
+    completed: player ? 1 : 0, total: 1, score: player?.score || 0,
+    finished: Boolean(player), exhausted: !day.puzzleId
+  };
+}
+
+function towerLeaderboard(key) {
+  const rows = Object.entries(towerDay(key).players).map(([userId, player]) => ({
+    userId, displayName: db.users[userId]?.displayName || 'Anonymous',
+    score: player.score, correctPlacements: player.correctPlacements
+  })).sort((a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId));
+  let rank = 1;
+  return rows.slice(0, 100).map((row, index) => {
+    if (index && row.score !== rows[index - 1].score) rank = index + 1;
+    return { ...row, rank };
+  });
+}
+
+function towerState(userId) {
+  const key = dayKey();
+  const day = towerDay(key);
+  const puzzle = tower.puzzles.find(question => question.id === day.puzzleId);
+  if (day.puzzleId && !puzzle) throw new Error('Missing Trivia Tower question referenced by a saved day.');
+  const player = day.players[userId];
+  return {
+    game: 'tower', date: key, timeZone: APP_TIMEZONE,
+    displayName: db.users[userId].displayName, exhausted: !puzzle, finished: Boolean(player),
+    pointsPerPlacement: tower.POINTS_PER_PLACEMENT, maxScore: tower.POINTS_PER_PLACEMENT * tower.ITEM_COUNT,
+    puzzle: puzzle ? tower.publicTowerPuzzle(puzzle, day) : null,
+    result: player ? tower.revealResult(puzzle, player) : null,
+    leaderboard: towerLeaderboard(key)
+  };
+}
+
+function sendTowerLeaderboard() {
+  const key = dayKey();
+  const payload = JSON.stringify({ game: 'tower', date: key, leaderboard: towerLeaderboard(key) });
+  for (const res of sseClients) res.write(`event: leaderboard\ndata: ${payload}\n\n`);
 }
 
 function getState(userId, gameId) {
@@ -436,7 +489,7 @@ async function handleApi(req, res, url) {
       date: dayKey(),
       timeZone: APP_TIMEZONE,
       puzzlesPerDay: DAILY_COUNT,
-      games: Object.keys(GAME_CONFIGS)
+      games: [...Object.keys(GAME_CONFIGS), 'tower']
     });
   }
 
@@ -444,6 +497,43 @@ async function handleApi(req, res, url) {
     const userId = String(url.searchParams.get('userId') || '');
     if (!db.users[userId]) return json(res, 404, { error: 'Player not found.' });
     return json(res, 200, menuFor(userId));
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/tower/state') {
+    const userId = String(url.searchParams.get('userId') || '');
+    if (!db.users[userId]) return json(res, 404, { error: 'Player not found.' });
+    return json(res, 200, towerState(userId));
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/tower/leaderboard') {
+    const key = dayKey();
+    return json(res, 200, { game: 'tower', date: key, leaderboard: towerLeaderboard(key) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/tower/submit') {
+    const body = await readJson(req);
+    const userId = String(body.userId || '');
+    if (!db.users[userId]) return json(res, 404, { error: 'Player not found.' });
+    const key = dayKey();
+    const day = towerDay(key);
+    if (body.date !== key || body.puzzleId !== day.puzzleId) {
+      return json(res, 409, { error: 'A new daily tower is ready. Refresh to play today’s question.' });
+    }
+    if (!day.puzzleId) return json(res, 409, { error: 'All available towers have been played. New questions are on the way.' });
+    if (day.players[userId]) return json(res, 200, towerState(userId));
+    const puzzle = tower.puzzles.find(question => question.id === day.puzzleId);
+    if (!tower.validOrder(puzzle, body.order)) {
+      return json(res, 400, { error: 'Place all six items in the tower exactly once.' });
+    }
+    const result = tower.scoreOrder(puzzle, body.order);
+    day.players[userId] = {
+      order: body.order, score: result.score, correctPlacements: result.correctPlacements,
+      finishedAt: new Date().toISOString()
+    };
+    saveDb();
+    json(res, 200, towerState(userId));
+    sendTowerLeaderboard();
+    return;
   }
 
   if (req.method === 'GET' && url.pathname === '/api/state') {
