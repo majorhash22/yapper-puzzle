@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#181425" />
   <title>Trivia Tower · Yappers Puzzle</title>
   <link rel="stylesheet" href="/styles.css?v=9" />
-  <link rel="stylesheet" href="/tower/styles.css?v=1" />
+  <link rel="stylesheet" href="/tower/styles.css?v=2" />
 </head>
 <body class="tower-page">
   <main class="tower-shell">
@@ -56,7 +56,8 @@
           <div class="tower-score"><span id="scoreLabel">UP FOR GRABS</span><strong id="towerScore">600</strong><span id="scoreDetail">100 points per correct placement</span></div>
           <button id="lockButton" class="lock-button" type="button">Lock in my tower <span aria-hidden="true">↗</span></button>
           <p id="moveHelp" class="move-help">Drag the rows or use ↑ ↓ to move them. Take your time. You get one submission.</p>
-          <p id="towerFeedback" class="tower-feedback" role="status"></p>
+          <p id="towerFeedback" class="tower-feedback" role="status" aria-atomic="true"></p>
+          <button id="skipRevealButton" class="secondary hidden" type="button">Show all answers</button>
           <button id="refreshButton" class="secondary hidden" type="button">Load today’s tower</button>
         </section>
 
@@ -72,7 +73,7 @@
         <div><div class="eyebrow">TODAY’S CLIMB</div><h2 id="resultTitle"></h2><p id="resultCopy"></p><p id="resetCopy" class="muted-copy"></p></div>
         <div id="factSources" class="fact-sources"></div>
       </section>
-      <section class="tower-leaderboard card" aria-labelledby="towerLeaderboardHeading">
+      <section id="towerLeaderboardCard" class="tower-leaderboard card" aria-labelledby="towerLeaderboardHeading">
         <div class="leaderboard-head"><div><div class="eyebrow">LIVE · TODAY</div><h2 id="towerLeaderboardHeading">The daily climbers</h2></div><span class="live-dot" title="Live updates"></span></div>
         <div id="towerLeaderboard" class="leaderboard"></div>
       </section>
@@ -85,6 +86,6 @@
     </section>
     <footer class="tower-footer">A little knowledge. A little instinct. A new climb every day.</footer>
   </main>
-  <script src="/tower/script.js?v=1"></script>
+  <script src="/tower/script.js?v=2"></script>
 </body>
 </html>

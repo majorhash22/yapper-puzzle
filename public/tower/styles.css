@@ -33,7 +33,11 @@
 .row-controls button { width:27px; height:23px; padding:0; border-radius:5px; background:#0003; color:inherit; font-weight:900; }
 .row-controls button:disabled { opacity:.25; }.row-controls button:focus-visible { outline:2px solid #fff; outline-offset:1px; }
 .placement-mark { font-size:.78rem; font-weight:850; padding:5px 7px; border-radius:7px; background:#0004; white-space:nowrap; }
-.placement-mark.missed { font-size:1.1rem; padding:2px 8px; }
+.placement-mark.correct { background:#064e3b; color:#d1fae5; }
+.placement-mark.missed { background:#7f1d1d; color:#fee2e2; }
+.placement-mark.pending { background:#0002; opacity:.65; }
+.placement-correct { box-shadow:inset 5px 0 0 #86efac; }
+.placement-incorrect { box-shadow:inset 5px 0 0 #fca5a5; }
 .tower-row.placeholder-row { background:#232329; color:#686875; min-height:73px; border-color:#37373f; }
 .placeholder-row .row-label { font-size:.9rem; font-weight:650; text-align:center; letter-spacing:.03em; }
 .placeholder-row .row-position { color:#858590; }
@@ -58,8 +62,8 @@
 .tower-join,.exhausted-card { max-width:650px; padding:35px; margin:60px auto; }.tower-join h1,.exhausted-card h1 { font-size:2.1rem; letter-spacing:-.04em; }.tower-join p,.exhausted-card p { color:#bab4c7; line-height:1.6; }.tower-join label { display:block; margin:25px 0 8px; font-size:.85rem; }
 .page-message { text-align:center; color:#d3c7dd; font-size:.88rem; }.page-message:empty { display:none; }#retryButton { display:block; margin:15px auto; }
 .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-.revealed .tower-row { animation:reveal-row .35s both; animation-delay:calc(var(--level) * .13s); }@keyframes reveal-row { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-@media (prefers-reduced-motion:reduce) { .revealed .tower-row { animation:none; } }
+.row-revealing { animation:reveal-row .4s both; }@keyframes reveal-row { from { opacity:.25; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce) { .row-revealing { animation:none; } }
 @media (max-width:1050px) { .tower-stage { grid-template-columns:minmax(0,1fr) 210px minmax(0,1fr); gap:15px; }.tower-row { padding:10px 9px; gap:5px; }.row-label { font-size:1rem; }.question-card h2 { font-size:1.4rem; } }
 @media (max-width:760px) { .tower-shell { width:calc(100% - 24px); padding-top:16px; }.tower-topbar { flex-wrap:wrap; gap:10px; }.daily-date { width:100%; text-align:center; }.tower-stage { grid-template-columns:1fr 1fr; gap:14px; }.tower-center { grid-column:1/-1; grid-row:1; padding-top:0; display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; align-items:center; }.question-card { grid-row:1/4; padding:18px 12px; }.question-card h2 { font-size:1.4rem; }.build-guide { display:none; }.tower-score { padding:0; }.tower-score strong { font-size:2.6rem; }.move-help { margin:0; grid-column:1/-1; }.tower-feedback { grid-column:1/-1; margin:0; }#refreshButton { grid-column:1/-1; }.tower-cap { min-height:100px; padding:15px 7px; }.tower-cap h2 { font-size:1.1rem; }.tower-cap > span { font-size:.65rem; }.tower-frame { border-width:3px; border-radius:25px; }.tower-row { min-height:87px; grid-template-columns:15px minmax(0,1fr); gap:4px; padding:9px 7px; }.row-label { font-size:.91rem; }.row-controls { flex-direction:row; grid-column:2; }.row-controls button { width:28px; height:24px; }.tower-row.placeholder-row { min-height:87px; }.tower-edge { padding:8px; flex-direction:column; align-items:flex-start; gap:3px; }.tower-edge strong { text-align:left; font-size:.61rem; }.placement-mark { grid-column:2; justify-self:start; padding:3px 6px; font-size:.65rem; }.placement-mark.missed { font-size:.8rem; padding:3px 6px; }.answer-frame .tower-row .row-value { font-size:.65rem; }.result-details { grid-template-columns:1fr; gap:12px; padding:20px; }.tower-intro { padding:22px 0; }.tower-intro h1 { font-size:1.8rem; } }
 @media (max-width:380px) { .tower-stage { gap:8px; }.row-label { font-size:.82rem; }.tower-wordmark { font-size:.8rem; }.tower-row { min-height:96px; }.tower-row.placeholder-row { min-height:96px; }.question-card h2 { font-size:1.18rem; } }

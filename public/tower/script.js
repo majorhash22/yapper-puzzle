@@ -5,6 +5,11 @@ let state = null;
 let order = [];
 let busy = false;
 let draggedId = null;
+const REVEAL_INITIAL_DELAY_MS = 650;
+const REVEAL_STEP_MS = 1200;
+let revealing = false;
+let revealedCount = 0;
+let revealTimer = null;
 
 function readStorage(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -66,10 +71,11 @@ function moveItem(id, delta) {
   $('towerFeedback').textContent = `${item.label} moved to position ${target + 1} from the bottom.`;
 }
 
-function itemRow(item, position, answer = false) {
+function itemRow(item, position, answer = false, animatePosition = 0) {
   const row = document.createElement('li');
   row.className = 'tower-row'; row.dataset.itemId = item.id; row.dataset.color = item.color;
-  row.style.setProperty('--level', position - 1);
+  row.dataset.position = position;
+  if (position === animatePosition) row.classList.add('row-revealing');
   const number = document.createElement('span'); number.className = 'row-position'; number.textContent = position;
   const label = document.createElement('span'); label.className = 'row-label'; label.textContent = item.label;
   row.append(number, label);
@@ -77,10 +83,18 @@ function itemRow(item, position, answer = false) {
     const fact = state.result.facts.find(fact => fact.id === item.id);
     const value = document.createElement('span'); value.className = 'row-value'; value.textContent = fact.valueLabel; label.append(value);
   } else if (state.finished) {
-    const correct = state.result.placements.find(placement => placement.position === position).correct;
-    const mark = document.createElement('span'); mark.className = `placement-mark${correct ? '' : ' missed'}`;
-    mark.textContent = correct ? `✓ +${state.pointsPerPlacement}` : '✕';
-    mark.setAttribute('aria-label', correct ? 'Correct placement' : 'Incorrect placement'); row.append(mark);
+    const mark = document.createElement('span');
+    if (position <= revealedCount) {
+      const correct = state.result.placements.find(placement => placement.position === position).correct;
+      row.classList.add(correct ? 'placement-correct' : 'placement-incorrect');
+      mark.className = `placement-mark ${correct ? 'correct' : 'missed'}`;
+      mark.textContent = correct ? `✓ +${state.pointsPerPlacement}` : '✕ Wrong';
+      mark.setAttribute('aria-label', correct ? 'Correct placement' : 'Incorrect placement');
+    } else {
+      mark.className = 'placement-mark pending'; mark.textContent = '…';
+      mark.setAttribute('aria-label', 'Placement not checked yet');
+    }
+    row.append(mark);
   } else {
     row.draggable = !busy; row.tabIndex = 0;
     row.setAttribute('aria-label', `${item.label}, position ${position} from the bottom. Use arrow keys to move.`);
@@ -113,24 +127,79 @@ function itemRow(item, position, answer = false) {
   return row;
 }
 
-function renderTowers() {
+function renderTowers({ animatePosition = 0 } = {}) {
   const byId = new Map(state.puzzle.items.map(item => [item.id, item]));
-  $('playerTower').replaceChildren(...[...order].reverse().map((id, index) => itemRow(byId.get(id), 6 - index)));
-  if (state.finished) {
-    $('answerTower').replaceChildren(...[...state.result.correctOrder].reverse().map((id, index) => itemRow(byId.get(id), 6 - index, true)));
-  } else {
-    const placeholders = Array.from({ length: 6 }, (_, index) => {
-      const row = document.createElement('li'); row.className = 'tower-row placeholder-row';
-      const number = document.createElement('span'); number.className = 'row-position'; number.textContent = 6 - index;
-      const label = document.createElement('span'); label.className = 'row-label'; label.textContent = 'Waiting to reveal';
-      row.append(number, label); return row;
-    });
-    $('answerTower').replaceChildren(...placeholders);
+  $('playerTower').replaceChildren(...[...order].reverse().map((id, index) => itemRow(byId.get(id), 6 - index, false, animatePosition)));
+  $('answerTower').replaceChildren(...Array.from({ length: 6 }, (_, index) => {
+    const position = 6 - index;
+    if (state.finished && position <= revealedCount) {
+      return itemRow(byId.get(state.result.correctOrder[position - 1]), position, true, animatePosition);
+    }
+    // Unrevealed answers stay out of the DOM, including for screen readers.
+    const row = document.createElement('li'); row.className = 'tower-row placeholder-row'; row.dataset.position = position;
+    const number = document.createElement('span'); number.className = 'row-position'; number.textContent = position;
+    const label = document.createElement('span'); label.className = 'row-label'; label.textContent = 'Waiting to reveal';
+    row.append(number, label); return row;
+  }));
+}
+
+function updateRevealProgress() {
+  const checked = state.result.placements.filter(placement => placement.position <= revealedCount);
+  const correct = checked.filter(placement => placement.correct).length;
+  $('towerScore').textContent = correct * state.pointsPerPlacement;
+  $('scoreLabel').textContent = revealing ? 'SCORE SO FAR' : 'YOUR DAILY SCORE';
+  $('scoreDetail').textContent = revealing ? `${revealedCount}/6 placements checked` : `${correct}/6 correct placements`;
+  $('answerSubtitle').textContent = revealing ? `Revealing from the bottom · ${revealedCount}/6` : 'The complete ranking';
+  $('towerHeading').textContent = revealing ? 'Let’s see how you stacked up.' : 'That’s today’s tower.';
+  $('skipRevealButton').classList.toggle('hidden', !revealing);
+  $('resultDetails').classList.toggle('hidden', revealing);
+  $('towerLeaderboardCard').classList.toggle('hidden', revealing);
+}
+
+function renderResultDetails() {
+  $('resultTitle').textContent = state.result.correctPlacements === 6 ? 'A perfect tower. Nicely built.' : `${state.result.correctPlacements} of 6 in the right place.`;
+  $('resultCopy').textContent = 'Every exact placement earns points, even if a lower row is wrong. Compare your tower with the answers above.';
+  $('resetCopy').textContent = `Come back after midnight (${state.timeZone}) for a different question.`;
+  const heading = document.createElement('strong'); heading.textContent = 'CHECK THE FACTS';
+  $('factSources').replaceChildren(heading);
+  for (const source of state.result.sources) {
+    const link = document.createElement('a'); link.href = source.url; link.textContent = `${source.title} ↗`; link.target = '_blank'; link.rel = 'noopener noreferrer'; $('factSources').append(link);
   }
 }
 
-function render(nextState) {
+function finishReveal({ animatePosition = 0 } = {}) {
+  clearTimeout(revealTimer); revealTimer = null; revealing = false;
+  revealedCount = state.puzzle.items.length;
+  renderTowers({ animatePosition }); updateRevealProgress(); renderResultDetails(); renderLeaderboard(state.leaderboard);
+}
+
+function revealNextPlacement() {
+  revealTimer = null;
+  if (!revealing || !state?.finished) return;
+  revealedCount += 1;
+  const placement = state.result.placements.find(placement => placement.position === revealedCount);
+  const answer = state.puzzle.items.find(item => item.id === state.result.correctOrder[revealedCount - 1]);
+  const guess = state.puzzle.items.find(item => item.id === placement.id);
+  $('towerFeedback').textContent = placement.correct
+    ? `Position ${revealedCount}: ${answer.label}. Correct! +${state.pointsPerPlacement} points.`
+    : `Position ${revealedCount}: ${answer.label}. You placed ${guess.label}. Incorrect — 0 points.`;
+  if (revealedCount === state.puzzle.items.length) finishReveal({ animatePosition: revealedCount });
+  else {
+    renderTowers({ animatePosition: revealedCount }); updateRevealProgress();
+    revealTimer = setTimeout(revealNextPlacement, REVEAL_STEP_MS);
+  }
+  // Keep the row being checked in view on phones, where a tower is taller
+  // than the viewport. The player's full submitted order stays visible.
+  $('answerTower').querySelector(`[data-position="${revealedCount}"]`).scrollIntoView({
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'nearest'
+  });
+}
+
+function render(nextState, { animateReveal = false } = {}) {
+  clearTimeout(revealTimer); revealTimer = null;
   state = nextState;
+  revealing = Boolean(animateReveal && state.finished && !state.exhausted);
+  revealedCount = state.finished && !revealing ? state.puzzle?.items.length || 0 : 0;
   $('joinCard').classList.add('hidden'); $('retryButton').classList.add('hidden'); $('pageMessage').textContent = '';
   $('exhaustedCard').classList.toggle('hidden', !state.exhausted);
   $('towerGame').classList.toggle('hidden', state.exhausted);
@@ -153,6 +222,8 @@ function render(nextState) {
   $('moveHelp').classList.toggle('hidden', state.finished);
   $('buildGuide').classList.toggle('hidden', state.finished);
   $('resultDetails').classList.toggle('hidden', !state.finished);
+  $('towerLeaderboardCard').classList.remove('hidden');
+  $('skipRevealButton').classList.add('hidden');
   $('towerScore').textContent = state.finished ? state.result.score : state.maxScore;
   $('scoreLabel').textContent = state.finished ? 'YOUR DAILY SCORE' : 'UP FOR GRABS';
   $('scoreDetail').textContent = state.finished ? `${state.result.correctPlacements}/6 correct placements` : `${state.pointsPerPlacement} points per correct placement`;
@@ -162,18 +233,12 @@ function render(nextState) {
   $('towerHeading').textContent = state.finished ? 'That’s today’s tower.' : 'Build your way to the top.';
   renderTowers(); renderLeaderboard(state.leaderboard);
   if (state.finished) {
-    $('playerTower').classList.add('revealed'); $('answerTower').classList.add('revealed');
-    $('resultTitle').textContent = state.result.correctPlacements === 6 ? 'A perfect tower. Nicely built.' : `${state.result.correctPlacements} of 6 in the right place.`;
-    $('resultCopy').textContent = 'Every exact placement earns points, even if a lower row is wrong. Compare your tower with the answers above.';
-    $('resetCopy').textContent = `Come back after midnight (${state.timeZone}) for a different question.`;
-    const heading = document.createElement('strong'); heading.textContent = 'CHECK THE FACTS';
-    $('factSources').replaceChildren(heading);
-    for (const source of state.result.sources) {
-      const link = document.createElement('a'); link.href = source.url; link.textContent = `${source.title} ↗`; link.target = '_blank'; link.rel = 'noopener noreferrer'; $('factSources').append(link);
-    }
+    updateRevealProgress();
+    if (revealing) {
+      $('towerFeedback').textContent = 'Your tower is locked. Starting at the bottom…';
+      revealTimer = setTimeout(revealNextPlacement, REVEAL_INITIAL_DELAY_MS);
+    } else renderResultDetails();
     try { localStorage.removeItem(draftKey()); } catch {}
-  } else {
-    $('playerTower').classList.remove('revealed'); $('answerTower').classList.remove('revealed');
   }
 }
 
@@ -202,22 +267,36 @@ $('towerJoinForm').addEventListener('submit', async event => {
 $('lockButton').addEventListener('click', async () => {
   if (busy || !state || state.finished) return;
   busy = true; $('lockButton').disabled = true; $('lockButton').textContent = 'Locking in…'; renderTowers();
+  $('towerLeaderboardCard').classList.add('hidden');
   try {
-    render(await api('/api/tower/submit', { userId, date: state.date, puzzleId: state.puzzle.id, order }));
-    $('resultDetails').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'nearest' });
+    render(await api('/api/tower/submit', { userId, date: state.date, puzzleId: state.puzzle.id, order }), { animateReveal: true });
   } catch (error) {
     $('towerFeedback').textContent = error.message;
     if (error.status === 409) $('refreshButton').classList.remove('hidden');
   } finally {
     busy = false; $('lockButton').disabled = false; $('lockButton').textContent = 'Lock in my tower ↗';
-    if (!state.finished) renderTowers();
+    if (!state.finished) {
+      renderTowers();
+      $('towerLeaderboardCard').classList.remove('hidden');
+    }
   }
 });
 
 $('retryButton').addEventListener('click', load);
 $('refreshButton').addEventListener('click', load);
+$('skipRevealButton').addEventListener('click', () => {
+  if (!revealing) return;
+  finishReveal();
+  $('towerFeedback').textContent = 'All six placements checked.';
+});
 const events = new EventSource('/api/events');
 events.addEventListener('leaderboard', event => {
-  try { const payload = JSON.parse(event.data); if (state && payload.game === 'tower' && payload.date === state.date) renderLeaderboard(payload.leaderboard); } catch {}
+  try {
+    const payload = JSON.parse(event.data);
+    if (state && payload.game === 'tower' && payload.date === state.date) {
+      state.leaderboard = payload.leaderboard;
+      if (!revealing && !busy) renderLeaderboard(payload.leaderboard);
+    }
+  } catch {}
 });
 load();
