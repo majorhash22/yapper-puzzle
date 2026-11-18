@@ -6,8 +6,9 @@ const tower = require('./trivia-tower');
 
 // Exercise the actual browser script with the same small DOM approach as
 // Chainly's tests. This covers interactions, not browser layout or rendering.
-async function page({ storage = new Map(), reducedMotion = false, savedPlayers = {} } = {}) {
+async function page({ storage = new Map(), reducedMotion = false, savedPlayers = {}, browserNavigator = {}, legacyCopy = false } = {}) {
   const animations = [];
+  const requests = [];
   const timers = new Map();
   let nextTimer = 0;
   class Element {
@@ -41,6 +42,7 @@ async function page({ storage = new Map(), reducedMotion = false, savedPlayers =
       return match ? this.children.find(child => String(child.dataset[match[1] === 'item-id' ? 'itemId' : 'position']) === match[2]) : null;
     }
     focus() {}
+    select() { this.selected = true; }
     scrollIntoView() {}
     showModal() { this.open = true; }
     close() { this.open = false; }
@@ -84,6 +86,7 @@ async function page({ storage = new Map(), reducedMotion = false, savedPlayers =
   }
   let failure = false;
   const fetch = async (url, options) => {
+    requests.push({ url, method: options?.method || 'GET' });
     if (url === '/api/register') return { ok: true, json: async () => ({ userId: 'ui-player' }) };
     if (failure) return { ok: false, status: 503, json: async () => ({ error: 'Connection interrupted. Try again.' }) };
     if (options?.method === 'POST') {
@@ -97,14 +100,15 @@ async function page({ storage = new Map(), reducedMotion = false, savedPlayers =
   };
   const eventHandlers = {};
   const context = vm.createContext({
-    document: { getElementById: id => elements[id], createElement: tag => new Element(tag), querySelector: () => playerFrame, querySelectorAll: () => [] },
+    document: { getElementById: id => elements[id], createElement: tag => new Element(tag), querySelector: () => playerFrame, querySelectorAll: () => [], execCommand: command => command === 'copy' && legacyCopy },
+    navigator: browserNavigator, location: { origin: 'https://puzzle.example' },
     localStorage: storageApi, fetch, matchMedia: () => ({ matches: reducedMotion }),
     setTimeout: callback => { timers.set(++nextTimer, callback); return nextTimer; }, clearTimeout: id => timers.delete(id),
     EventSource: class { addEventListener(name, handler) { eventHandlers[name] = handler; } }
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, 'public/tower/script.js'), 'utf8'), context);
   await new Promise(resolve => setImmediate(resolve));
-  return { elements, storage, fixtures, animations, call: code => vm.runInContext(code, context),
+  return { elements, storage, fixtures, animations, requests, call: code => vm.runInContext(code, context),
     fail: value => { failure = value; },
     tick: () => { const [id, callback] = timers.entries().next().value; timers.delete(id); callback(); },
     emitLeaderboard: payload => eventHandlers.leaderboard({ data: JSON.stringify(payload) }),
@@ -123,7 +127,9 @@ async function page({ storage = new Map(), reducedMotion = false, savedPlayers =
 }
 
 async function main() {
-  const app = await page(); const el = app.elements;
+  const copied = []; const nativeShares = [];
+  const browserNavigator = { clipboard: { writeText: async content => copied.push(content) } };
+  const app = await page({ browserNavigator }); const el = app.elements;
   const solve = async difficulty => {
     const expected = tower.correctOrder(app.fixtures[difficulty].puzzle);
     for (const [index, id] of expected.entries()) {
@@ -144,6 +150,8 @@ async function main() {
   assert.equal(el.questionTitle, undefined); assert.equal(el.questionCategory, undefined);
   assert.equal(el.dailyScore.textContent, '0');
   assert.equal(el.contentRefreshNotice.classList.contains('hidden'), true);
+  assert.equal(el.shareLevelButton.classList.contains('hidden'), true);
+  await el.shareLevelButton.click(); assert.ok(!el.shareDialog.open, 'Unfinished answers cannot be shared');
   assert.equal(el.difficultyPicker.children[1].disabled, true); assert.equal(el.difficultyPicker.children[2].disabled, true);
   await el.difficultyPicker.children[2].click(); assert.equal(app.call('difficulty'), 'easy', 'Hard stays locked before finishing Easy');
   const firstDraft = app.call('order.join()');
@@ -161,6 +169,8 @@ async function main() {
   assert.equal(app.animations.length, 2); assert.equal(app.call('revealedCount'), 0);
   assert.equal(el.dailyScore.textContent, '0', 'The daily total does not spoil the current reveal');
   assert.equal(el.nextLevelButton.classList.contains('hidden'), true);
+  assert.equal(el.shareLevelButton.classList.contains('hidden'), true, 'Sharing waits until the reveal finishes');
+  await el.shareLevelButton.click(); assert.ok(!el.shareDialog.open);
   assert.ok(el.difficultyPicker.children.every(button => button.disabled));
   app.tick(); assert.equal(app.call('revealedCount'), 1);
   await el.skipRevealButton.click(); assert.equal(app.call('revealedCount'), 6);
@@ -168,6 +178,24 @@ async function main() {
   assert.equal(el.dailyLevelProgress.textContent, '1/3 levels finished');
   assert.equal(el.difficultyPicker.children[1].disabled, false); assert.equal(el.difficultyPicker.children[2].disabled, true);
   assert.equal(el.nextLevelButton.classList.contains('hidden'), false); assert.equal(el.nextLevelButton.textContent, 'Continue to Medium');
+  assert.equal(el.shareLevelButton.textContent, 'Share Easy answers');
+  assert.equal(el.shareDayButton.classList.contains('hidden'), true);
+  await el.shareLevelButton.click(); assert.equal(el.shareDialog.open, true);
+  const easyShare = el.sharePreview.value;
+  assert.match(easyShare, /Trivia Tower · 2030-01-01/); assert.match(easyShare, /UI Player’s answers/);
+  assert.ok(easyShare.includes(`Easy · ${easyPoints}/600 points`));
+  assert.ok(easyShare.includes(app.fixtures.easy.puzzle.instructions));
+  const submittedEasy = app.call('state.result');
+  for (const placement of submittedEasy.placements) {
+    const label = app.fixtures.easy.puzzle.items.find(item => item.id === placement.id).label;
+    assert.ok(easyShare.includes(`${placement.position}. ${placement.correct ? '✅' : '❌'} ${label}`), 'Share the actual submitted order, including mistakes');
+  }
+  assert.ok(easyShare.indexOf('\n6. ') < easyShare.indexOf('\n1. '), 'The shared tower reads from top to bottom');
+  assert.ok(easyShare.endsWith('https://puzzle.example/tower/index.html'));
+  assert.ok(!easyShare.includes('ui-player')); assert.ok(!easyShare.includes('userId='), 'Shared links contain no player credentials');
+  assert.equal(el.nativeShareButton.classList.contains('hidden'), true);
+  await el.copyAnswersButton.click(); assert.equal(copied.at(-1), easyShare); assert.match(el.shareStatus.textContent, /Answers copied/);
+  el.shareDialog.close(); await el.shareDialog.emit('close'); assert.equal(el.sharePreview.value, '');
 
   const switching = el.nextLevelButton.click();
   assert.equal(el.lockButton.disabled, true); await switching;
@@ -186,6 +214,17 @@ async function main() {
   assert.equal(el.scoreDetail.textContent, '6/6 correct placements');
   assert.equal(el.dailyLevelProgress.textContent, '2/3 levels finished');
   assert.equal(el.nextLevelButton.textContent, 'Continue to Hard');
+  assert.equal(el.shareLevelButton.textContent, 'Share Medium answers');
+  assert.equal(el.shareDayButton.classList.contains('hidden'), false);
+  const beforeShareRequests = app.requests.length;
+  await el.shareDayButton.click();
+  assert.match(el.sharePreview.value, /Easy ·/); assert.match(el.sharePreview.value, /Medium · 800\/800/);
+  assert.ok(!el.sharePreview.value.includes('Hard ·'), 'Unfinished levels never enter a shared result');
+  assert.deepEqual(app.requests.slice(beforeShareRequests).map(request => new URL(request.url, 'http://localhost').searchParams.get('difficulty')), ['easy', 'medium'], 'Sharing fetches only completed levels');
+  app.fail(true); el.shareDialog.close(); await el.shareDayButton.click();
+  assert.equal(el.sharePreview.value, ''); assert.equal(el.copyAnswersButton.disabled, true);
+  assert.match(el.shareStatus.textContent, /Connection interrupted/);
+  app.fail(false); el.shareDialog.close();
   await el.nextLevelButton.click(); assert.equal(app.call('difficulty'), 'hard');
   assert.equal(el.towerScore.textContent, 1200); assert.equal(el.answerFrame.classList.contains('hidden'), true);
   await solve('hard'); await el.lockButton.click(); await el.skipRevealButton.click();
@@ -195,6 +234,26 @@ async function main() {
   assert.match(el.resultCopy.textContent, new RegExp(total.toLocaleString()));
   assert.equal(el.towerLeaderboard.children.length, 1);
   assert.match(el.towerLeaderboard.children[0].children[1].children[0].textContent, /3\/3 levels/);
+  assert.equal(el.shareLevelButton.textContent, 'Share Hard answers');
+  await el.shareDayButton.click();
+  const allAnswers = el.sharePreview.value;
+  assert.ok(allAnswers.indexOf('Easy ·') < allAnswers.indexOf('Medium ·'));
+  assert.ok(allAnswers.indexOf('Medium ·') < allAnswers.indexOf('Hard ·'));
+  assert.ok(allAnswers.includes(`Today’s total: ${total.toLocaleString()}/2,600 points · 3/3 levels finished`));
+  browserNavigator.share = async payload => nativeShares.push(payload);
+  el.shareDialog.close(); await el.shareDayButton.click();
+  assert.equal(el.nativeShareButton.classList.contains('hidden'), false);
+  await el.nativeShareButton.click(); assert.equal(nativeShares[0].text, allAnswers);
+  assert.equal(nativeShares[0].title, 'Trivia Tower · 2030-01-01');
+  browserNavigator.share = async () => { const error = new Error('Cancelled'); error.name = 'AbortError'; throw error; };
+  await el.nativeShareButton.click(); assert.equal(el.shareStatus.textContent, ''); assert.equal(el.nativeShareButton.disabled, false);
+  browserNavigator.share = async () => { throw new Error('Not allowed'); };
+  await el.nativeShareButton.click(); assert.match(el.shareStatus.textContent, /Use Copy answers/);
+  browserNavigator.clipboard.writeText = async () => { throw new Error('Clipboard denied'); };
+  await el.copyAnswersButton.click(); assert.equal(el.sharePreview.selected, true); assert.match(el.shareStatus.textContent, /Select the text above/);
+  const pendingShare = el.shareDayButton.click();
+  app.call('clearShare()'); await pendingShare;
+  assert.equal(el.sharePreview.value, '', 'Closing a pending preview cannot bring old answers back');
   await el.difficultyPicker.children[0].click();
   assert.equal(app.call('state.finished'), true); assert.equal(app.call('revealing'), false);
   assert.equal(el.dailyScore.textContent, total.toLocaleString(), 'Revisiting a result cannot add its points again');
@@ -203,6 +262,10 @@ async function main() {
   const restored = await page({ storage: app.storage, savedPlayers });
   assert.equal(restored.elements.dailyScore.textContent, total.toLocaleString());
   assert.equal(restored.call('difficulty'), 'hard', 'A completed day restores its final result');
+  await restored.elements.shareLevelButton.click(); assert.match(restored.elements.sharePreview.value, /Hard · 1,200\/1,200/);
+  const legacy = await page({ storage: app.storage, savedPlayers, legacyCopy: true });
+  await legacy.elements.shareLevelButton.click(); await legacy.elements.copyAnswersButton.click();
+  assert.match(legacy.elements.shareStatus.textContent, /Answers copied/, 'Browsers without the Clipboard API can use the selected-text fallback');
   const freshDay = await page({ storage: new Map([['yappersPuzzleUserId','ui-player'],['triviaTowerDifficulty','hard']]) });
   assert.equal(freshDay.call('difficulty'), 'easy', 'A saved Hard preference cannot bypass the next day’s Easy level');
   assert.equal(freshDay.elements.dailyScore.textContent, '0'); assert.equal(freshDay.elements.difficultyPicker.children[1].disabled, true);
@@ -212,7 +275,9 @@ async function main() {
   ] });
   assert.equal(el.towerLeaderboard.children.length, 2, 'Combined live standings update while viewing a different level');
 
+  await app.elements.shareDayButton.click();
   app.refreshContent(); await app.emitReset();
+  assert.equal(el.shareDialog.open, false); assert.equal(el.sharePreview.value, '', 'A content reset clears any open share preview');
   assert.equal(app.call('state.puzzle.id'), 'wildlife-size'); assert.equal(app.call('difficulty'), 'easy');
   assert.equal(el.dailyScore.textContent, '0'); assert.equal(el.dailyLevelProgress.textContent, '0/3 levels finished');
   assert.equal(el.contentRefreshNotice.classList.contains('hidden'), false);
@@ -229,6 +294,6 @@ async function main() {
   for (let count = 0; count < 6; count++) reduced.tick();
   assert.equal(reduced.call('revealedCount'), 6); assert.equal(reduced.call('revealing'), false);
   assert.equal(reduced.elements.nextLevelButton.textContent, 'Continue to Medium');
-  console.log('Passed: rules, locked levels, failed attempts, drafts, progression, cumulative reveals, combined standings, one-time content reset and reconnect, saved results, and reduced motion (DOM interaction checks).');
+  console.log('Passed: rules, progression, cumulative reveals, single-level and combined answer sharing, submitted-order accuracy, clipboard and manual fallbacks, native sharing and cancellation, share failures, reset and restart recovery, standings, drafts, and reduced motion (DOM interaction checks).');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

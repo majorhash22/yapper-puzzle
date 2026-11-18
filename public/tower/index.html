@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#181425" />
   <title>Trivia Tower · Yappers Puzzle</title>
   <link rel="stylesheet" href="/styles.css?v=9" />
-  <link rel="stylesheet" href="/tower/styles.css?v=6" />
+  <link rel="stylesheet" href="/tower/styles.css?v=7" />
 </head>
 <body class="tower-page">
   <main class="tower-shell">
@@ -71,7 +71,13 @@
       </div>
 
       <section id="resultDetails" class="result-details hidden" aria-labelledby="resultTitle">
-        <div><div class="eyebrow">TODAY’S CLIMB</div><h2 id="resultTitle"></h2><p id="resultCopy"></p><p id="resetCopy" class="muted-copy"></p><button id="nextLevelButton" class="lock-button hidden" type="button">Continue to Medium</button></div>
+        <div><div class="eyebrow">TODAY’S CLIMB</div><h2 id="resultTitle"></h2><p id="resultCopy"></p><p id="resetCopy" class="muted-copy"></p>
+          <div class="result-actions">
+            <button id="nextLevelButton" class="lock-button hidden" type="button">Continue to Medium</button>
+            <button id="shareLevelButton" class="secondary hidden" type="button">Share my answers</button>
+            <button id="shareDayButton" class="secondary hidden" type="button">Share all finished levels</button>
+          </div>
+        </div>
         <div id="factSources" class="fact-sources"></div>
       </section>
       <section id="towerLeaderboardCard" class="tower-leaderboard card" aria-labelledby="towerLeaderboardHeading">
@@ -87,6 +93,14 @@
     </section>
     <footer class="tower-footer">A little knowledge. A little instinct. A new climb every day.</footer>
   </main>
+  <dialog id="shareDialog" class="rules-dialog share-dialog" aria-labelledby="shareTitle" aria-describedby="shareDescription">
+    <div class="share-heading"><h2 id="shareTitle">Share your answers</h2><form method="dialog"><button class="secondary" type="submit" aria-label="Close sharing">Close</button></form></div>
+    <p id="shareDescription">This includes your submitted answers and score. Copy the text or share it with an app.</p>
+    <label for="sharePreview">Text to share</label>
+    <textarea id="sharePreview" rows="14" readonly spellcheck="false"></textarea>
+    <p id="shareStatus" class="share-status" role="status" aria-live="polite" aria-atomic="true"></p>
+    <div class="share-actions"><button id="copyAnswersButton" class="lock-button" type="button" disabled>Copy answers</button><button id="nativeShareButton" class="secondary hidden" type="button" disabled>Share…</button></div>
+  </dialog>
   <dialog id="rulesDialog" class="rules-dialog" aria-labelledby="rulesTitle">
     <div class="eyebrow">WELCOME TO TRIVIA TOWER</div>
     <h2 id="rulesTitle">Six things. One correct order.</h2>
@@ -105,6 +119,6 @@
     <p class="rules-reset">Up to 2,600 points each day. The leaderboard combines all three levels.</p>
     <form method="dialog"><button class="lock-button" autofocus>Let’s build a tower</button></form>
   </dialog>
-  <script src="/tower/script.js?v=6"></script>
+  <script src="/tower/script.js?v=7"></script>
 </body>
 </html>

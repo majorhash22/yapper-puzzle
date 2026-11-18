@@ -14,6 +14,7 @@ const REVEAL_STEP_MS = 1200;
 let revealing = false;
 let revealedCount = 0;
 let revealTimer = null;
+let shareSequence = 0;
 
 function readStorage(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -63,6 +64,88 @@ function renderDailyProgress() {
   $('nextLevelButton').classList.toggle('hidden', !state.finished || revealing || !next);
   $('nextLevelButton').disabled = busy || loading || revealing;
   if (next) $('nextLevelButton').textContent = `Continue to ${next.label}`;
+  const canShare = state.finished && !state.exhausted && !revealing;
+  $('shareLevelButton').classList.toggle('hidden', !canShare);
+  $('shareDayButton').classList.toggle('hidden', !canShare || state.completedLevels < 2);
+  for (const id of ['shareLevelButton', 'shareDayButton']) $(id).disabled = busy || loading || !canShare;
+  const level = state.difficulties.find(level => level.id === difficulty);
+  $('shareLevelButton').textContent = `Share ${level.label} answers`;
+}
+
+function answersToShare(levels, summary) {
+  const sections = levels.map(level => {
+    const label = level.difficulties.find(option => option.id === level.difficulty).label;
+    const items = new Map(level.puzzle.items.map(item => [item.id, item.label]));
+    const placements = new Map(level.result.placements.map(placement => [placement.position, placement]));
+    const rows = [...level.result.submittedOrder].reverse().map((id, index) => {
+      const position = level.result.submittedOrder.length - index;
+      return `${position}. ${placements.get(position).correct ? '✅' : '❌'} ${items.get(id)}`;
+    });
+    return [`${label} · ${level.result.score.toLocaleString()}/${level.maxScore.toLocaleString()} points · ${level.result.correctPlacements}/6 correct`,
+      level.puzzle.instructions, level.puzzle.note, 'My tower (top to bottom):', ...rows].filter(Boolean).join('\n');
+  });
+  return [`Trivia Tower · ${summary.date}`, `${summary.displayName}’s answers`, ...sections,
+    `Today’s total: ${summary.totalScore.toLocaleString()}/${summary.dailyMaxScore.toLocaleString()} points · ${summary.completedLevels}/3 levels finished`,
+    `${location.origin}/tower/index.html`].join('\n\n');
+}
+
+function clearShare() {
+  shareSequence += 1;
+  $('shareDialog').close();
+  $('sharePreview').value = ''; $('shareStatus').textContent = '';
+  $('copyAnswersButton').disabled = true; $('nativeShareButton').disabled = true;
+}
+
+async function openShare(allLevels = false) {
+  if (!state?.finished || state.exhausted || revealing || busy || loading) return;
+  const snapshot = state;
+  const sequence = ++shareSequence;
+  $('shareTitle').textContent = allLevels ? 'Share today’s answers' : `Share ${state.difficulties.find(level => level.id === difficulty).label} answers`;
+  $('sharePreview').value = ''; $('shareStatus').textContent = 'Getting your answers ready…';
+  $('copyAnswersButton').disabled = true; $('nativeShareButton').disabled = true;
+  $('nativeShareButton').classList.toggle('hidden', typeof navigator.share !== 'function');
+  $('shareDialog').showModal();
+  try {
+    const levels = allLevels ? await Promise.all(snapshot.difficulties.filter(level => level.finished).map(level =>
+      api(`/api/tower/state?userId=${encodeURIComponent(userId)}&difficulty=${encodeURIComponent(level.id)}`))) : [snapshot];
+    if (sequence !== shareSequence || state !== snapshot || !$('shareDialog').open) return;
+    if (levels.some(level => !level.finished || !level.result || level.date !== snapshot.date || level.contentRevision !== snapshot.contentRevision)) {
+      throw new Error('Today’s towers have changed. Reload the game to share your latest answers.');
+    }
+    const summary = allLevels ? { ...snapshot, totalScore: levels.reduce((sum, level) => sum + level.result.score, 0), completedLevels: levels.length } : snapshot;
+    $('sharePreview').value = answersToShare(levels, summary);
+    $('shareStatus').textContent = '';
+    $('copyAnswersButton').disabled = false; $('nativeShareButton').disabled = false;
+  } catch (error) {
+    if (sequence === shareSequence) $('shareStatus').textContent = error.message;
+  }
+}
+
+async function copyAnswers() {
+  const content = $('sharePreview').value;
+  if (!content || !$('shareDialog').open) return;
+  const sequence = shareSequence;
+  let copied = false;
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(content); copied = true; }
+  } catch {}
+  if (sequence !== shareSequence) return;
+  if (!copied) {
+    $('sharePreview').focus(); $('sharePreview').select();
+    try { copied = document.execCommand('copy'); } catch {}
+  }
+  $('shareStatus').textContent = copied ? 'Answers copied. Paste them into your chat or post.' : 'Select the text above and copy it to share your answers.';
+}
+
+async function shareAnswers() {
+  if (!$('sharePreview').value || !$('shareDialog').open || typeof navigator.share !== 'function') return;
+  const sequence = shareSequence;
+  $('nativeShareButton').disabled = true;
+  try {
+    await navigator.share({ title: `Trivia Tower · ${state.date}`, text: $('sharePreview').value });
+  } catch (error) {
+    if (sequence === shareSequence) $('shareStatus').textContent = error.name === 'AbortError' ? '' : 'Sharing is unavailable. Use Copy answers or copy the text above.';
+  } finally { if (sequence === shareSequence) $('nativeShareButton').disabled = false; }
 }
 
 function animateTowerReveal(previousRect) {
@@ -256,6 +339,7 @@ function revealNextPlacement() {
 }
 
 function render(nextState, { animateReveal = false } = {}) {
+  clearShare();
   const previousRect = animateReveal ? document.querySelector('.player-frame').getBoundingClientRect() : null;
   clearTimeout(revealTimer); revealTimer = null;
   state = nextState;
@@ -372,6 +456,12 @@ $('lockButton').addEventListener('click', async () => {
 });
 
 $('retryButton').addEventListener('click', load);
+$('shareLevelButton').addEventListener('click', () => openShare());
+$('shareDayButton').addEventListener('click', () => openShare(true));
+$('copyAnswersButton').addEventListener('click', copyAnswers);
+$('nativeShareButton').addEventListener('click', shareAnswers);
+$('shareDialog').addEventListener('close', clearShare);
+$('shareDialog').addEventListener('cancel', clearShare);
 $('refreshButton').addEventListener('click', load);
 $('skipRevealButton').addEventListener('click', () => {
   if (!revealing) return;
