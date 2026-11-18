@@ -4,8 +4,12 @@ let userId = readStorage(playerKey) || '';
 let state = null;
 let order = [];
 let busy = false;
+let loading = false;
 let draggedId = null;
-const REVEAL_INITIAL_DELAY_MS = 650;
+let difficulty = readStorage('triviaTowerDifficulty') || 'easy';
+if (!['easy', 'medium', 'hard'].includes(difficulty)) difficulty = 'easy';
+let loadSequence = 0;
+const REVEAL_INITIAL_DELAY_MS = 900;
 const REVEAL_STEP_MS = 1200;
 let revealing = false;
 let revealedCount = 0;
@@ -22,6 +26,39 @@ function writeStorage(key, value) {
 }
 
 function draftKey() { return `triviaTower:${userId}:${state.date}:${state.puzzle.id}`; }
+
+function renderDifficulties() {
+  $('difficultyPicker').classList.remove('hidden');
+  $('difficultyMessage').classList.remove('hidden');
+  $('difficultyMessage').textContent = 'A different question at each level. One attempt per level, every day.';
+  $('difficultyPicker').replaceChildren(...state.difficulties.map(level => {
+    const button = document.createElement('button'); button.type = 'button';
+    button.className = 'difficulty-option'; button.setAttribute('aria-pressed', String(level.id === difficulty));
+    button.disabled = busy || loading || revealing;
+    const label = document.createElement('strong'); label.textContent = `${level.label}${level.finished ? ' ✓' : ''}`;
+    const detail = document.createElement('span'); detail.textContent = level.exhausted ? 'All explored' : `${level.maxScore} points`;
+    button.append(label, detail);
+    button.addEventListener('click', async () => {
+      if (busy || loading || revealing || difficulty === level.id) return;
+      await load(level.id);
+    });
+    $(`rules${level.label}Points`).textContent = `${level.pointsPerPlacement} points / spot`;
+    return button;
+  }));
+}
+
+function animateTowerReveal(previousRect) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const frame = document.querySelector('.player-frame');
+  const nextRect = frame.getBoundingClientRect();
+  frame.animate([
+    { transform: `translate(${previousRect.left - nextRect.left}px, ${previousRect.top - nextRect.top}px) scaleX(${previousRect.width / nextRect.width})` },
+    { transform: 'none' }
+  ], { duration: 720, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' });
+  $('answerFrame').animate([
+    { opacity: 0, transform: 'translate(75px, 28px)' }, { opacity: 1, transform: 'none' }
+  ], { duration: 650, delay: 150, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' });
+}
 
 async function api(url, body) {
   const response = await fetch(url, body === undefined ? {} : {
@@ -59,7 +96,7 @@ function renderLeaderboard(rows) {
 }
 
 function moveItem(id, delta) {
-  if (busy || state.finished) return;
+  if (busy || loading || state.finished) return;
   const index = order.indexOf(id);
   const target = index + delta;
   if (index < 0 || target < 0 || target >= order.length) return;
@@ -96,13 +133,13 @@ function itemRow(item, position, answer = false, animatePosition = 0) {
     }
     row.append(mark);
   } else {
-    row.draggable = !busy; row.tabIndex = 0;
+    row.draggable = !busy && !loading; row.tabIndex = 0;
     row.setAttribute('aria-label', `${item.label}, position ${position} from the bottom. Use arrow keys to move.`);
     const controls = document.createElement('div'); controls.className = 'row-controls';
     for (const [delta, symbol, direction] of [[1, '↑', 'up'], [-1, '↓', 'down']]) {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = symbol;
       button.setAttribute('aria-label', `Move ${item.label} ${direction}`);
-      button.disabled = busy || position + delta < 1 || position + delta > order.length;
+      button.disabled = busy || loading || position + delta < 1 || position + delta > order.length;
       button.addEventListener('click', () => moveItem(item.id, delta)); controls.append(button);
     }
     row.append(controls);
@@ -111,7 +148,7 @@ function itemRow(item, position, answer = false, animatePosition = 0) {
       event.preventDefault(); moveItem(item.id, event.key === 'ArrowUp' ? 1 : -1);
     });
     row.addEventListener('dragstart', event => {
-      if (busy) { event.preventDefault(); return; }
+      if (busy || loading) { event.preventDefault(); return; }
       draggedId = item.id; event.dataTransfer.setData('text/plain', item.id); event.dataTransfer.effectAllowed = 'move';
       row.classList.add('dragging');
     });
@@ -130,6 +167,7 @@ function itemRow(item, position, answer = false, animatePosition = 0) {
 function renderTowers({ animatePosition = 0 } = {}) {
   const byId = new Map(state.puzzle.items.map(item => [item.id, item]));
   $('playerTower').replaceChildren(...[...order].reverse().map((id, index) => itemRow(byId.get(id), 6 - index, false, animatePosition)));
+  if (!state.finished) { $('answerTower').replaceChildren(); return; }
   $('answerTower').replaceChildren(...Array.from({ length: 6 }, (_, index) => {
     const position = 6 - index;
     if (state.finished && position <= revealedCount) {
@@ -170,7 +208,7 @@ function renderResultDetails() {
 function finishReveal({ animatePosition = 0 } = {}) {
   clearTimeout(revealTimer); revealTimer = null; revealing = false;
   revealedCount = state.puzzle.items.length;
-  renderTowers({ animatePosition }); updateRevealProgress(); renderResultDetails(); renderLeaderboard(state.leaderboard);
+  renderTowers({ animatePosition }); updateRevealProgress(); renderResultDetails(); renderLeaderboard(state.leaderboard); renderDifficulties();
 }
 
 function revealNextPlacement() {
@@ -196,15 +234,21 @@ function revealNextPlacement() {
 }
 
 function render(nextState, { animateReveal = false } = {}) {
+  const previousRect = animateReveal ? document.querySelector('.player-frame').getBoundingClientRect() : null;
   clearTimeout(revealTimer); revealTimer = null;
   state = nextState;
+  difficulty = state.difficulty;
+  writeStorage('triviaTowerDifficulty', difficulty);
   revealing = Boolean(animateReveal && state.finished && !state.exhausted);
   revealedCount = state.finished && !revealing ? state.puzzle?.items.length || 0 : 0;
   $('joinCard').classList.add('hidden'); $('retryButton').classList.add('hidden'); $('pageMessage').textContent = '';
   $('exhaustedCard').classList.toggle('hidden', !state.exhausted);
   $('towerGame').classList.toggle('hidden', state.exhausted);
   $('dailyDate').textContent = `${state.date} · ${state.timeZone}`;
+  renderDifficulties();
   if (state.exhausted) return;
+  $('towerStage').classList.toggle('is-locked', state.finished);
+  $('answerFrame').classList.toggle('hidden', !state.finished);
   order = state.finished ? [...state.result.submittedOrder] : state.puzzle.items.map(item => item.id);
   if (!state.finished) {
     try { const draft = JSON.parse(readStorage(draftKey())); if (validDraft(draft, state.puzzle.items)) order = draft; } catch {}
@@ -232,6 +276,7 @@ function render(nextState, { animateReveal = false } = {}) {
   $('refreshButton').classList.add('hidden');
   $('towerHeading').textContent = state.finished ? 'That’s today’s tower.' : 'Build your way to the top.';
   renderTowers(); renderLeaderboard(state.leaderboard);
+  if (animateReveal) animateTowerReveal(previousRect);
   if (state.finished) {
     updateRevealProgress();
     if (revealing) {
@@ -242,13 +287,30 @@ function render(nextState, { animateReveal = false } = {}) {
   }
 }
 
-async function load() {
+async function load(nextDifficulty = difficulty) {
+  // Click listeners pass an Event; only an explicit level changes the request.
+  if (typeof nextDifficulty !== 'string') nextDifficulty = difficulty;
+  const sequence = ++loadSequence;
   $('retryButton').classList.add('hidden');
   if (!userId) { $('joinCard').classList.remove('hidden'); $('pageMessage').textContent = ''; return; }
-  try { render(await api(`/api/tower/state?userId=${encodeURIComponent(userId)}`)); }
+  loading = true;
+  $('lockButton').disabled = true;
+  if (state) renderDifficulties();
+  try {
+    const next = await api(`/api/tower/state?userId=${encodeURIComponent(userId)}&difficulty=${encodeURIComponent(nextDifficulty)}`);
+    if (sequence === loadSequence) render(next);
+  }
   catch (error) {
+    if (sequence !== loadSequence) return;
     if (error.status === 404) { userId = ''; $('joinCard').classList.remove('hidden'); $('pageMessage').textContent = 'Enter your name to join today’s tower.'; }
     else { $('pageMessage').textContent = error.message; $('retryButton').classList.remove('hidden'); }
+  }
+  finally {
+    if (sequence === loadSequence) {
+      loading = false; $('lockButton').disabled = busy;
+      if (state) renderDifficulties();
+      if (state?.puzzle && !state.finished) renderTowers();
+    }
   }
 }
 
@@ -260,21 +322,25 @@ $('towerJoinForm').addEventListener('submit', async event => {
   } catch (error) { $('pageMessage').textContent = error.message; }
   finally {
     busy = false;
+    $('lockButton').disabled = false;
+    if (state) renderDifficulties();
     if (state?.puzzle && !state.finished) renderTowers();
   }
 });
 
 $('lockButton').addEventListener('click', async () => {
-  if (busy || !state || state.finished) return;
+  if (busy || loading || !state || state.finished) return;
   busy = true; $('lockButton').disabled = true; $('lockButton').textContent = 'Locking in…'; renderTowers();
   $('towerLeaderboardCard').classList.add('hidden');
   try {
-    render(await api('/api/tower/submit', { userId, date: state.date, puzzleId: state.puzzle.id, order }), { animateReveal: true });
+    renderDifficulties();
+    render(await api('/api/tower/submit', { userId, date: state.date, puzzleId: state.puzzle.id, difficulty, order }), { animateReveal: true });
   } catch (error) {
     $('towerFeedback').textContent = error.message;
     if (error.status === 409) $('refreshButton').classList.remove('hidden');
   } finally {
     busy = false; $('lockButton').disabled = false; $('lockButton').textContent = 'Lock in my tower ↗';
+    renderDifficulties();
     if (!state.finished) {
       renderTowers();
       $('towerLeaderboardCard').classList.remove('hidden');
@@ -293,10 +359,12 @@ const events = new EventSource('/api/events');
 events.addEventListener('leaderboard', event => {
   try {
     const payload = JSON.parse(event.data);
-    if (state && payload.game === 'tower' && payload.date === state.date) {
+    if (state && payload.game === 'tower' && payload.date === state.date && (payload.difficulty || 'medium') === difficulty) {
       state.leaderboard = payload.leaderboard;
       if (!revealing && !busy) renderLeaderboard(payload.leaderboard);
     }
   } catch {}
 });
+$('rulesButton').addEventListener('click', () => $('rulesDialog').showModal());
+$('rulesDialog').showModal();
 load();

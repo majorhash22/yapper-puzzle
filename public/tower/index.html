@@ -6,14 +6,15 @@
   <meta name="theme-color" content="#181425" />
   <title>Trivia Tower · Yappers Puzzle</title>
   <link rel="stylesheet" href="/styles.css?v=9" />
-  <link rel="stylesheet" href="/tower/styles.css?v=2" />
+  <link rel="stylesheet" href="/tower/styles.css?v=3" />
 </head>
 <body class="tower-page">
   <main class="tower-shell">
     <header class="tower-topbar">
       <a class="back-link" href="/">← All games</a>
       <div class="tower-wordmark"><span aria-hidden="true">▥</span> TRIVIA TOWER</div>
-      <span id="dailyDate" class="daily-date">One tower. Every day.</span>
+      <button id="rulesButton" class="secondary rules-button" type="button">How to play</button>
+      <span id="dailyDate" class="daily-date">Three levels. Every day.</span>
     </header>
 
     <section id="joinCard" class="card tower-join hidden">
@@ -28,6 +29,8 @@
 
     <p id="pageMessage" class="page-message" role="status">Getting today’s tower ready…</p>
     <button id="retryButton" class="secondary hidden" type="button">Try again</button>
+    <nav id="difficultyPicker" class="difficulty-picker hidden" aria-label="Daily tower difficulty"></nav>
+    <p id="difficultyMessage" class="difficulty-message hidden" role="status"></p>
 
     <section id="towerGame" class="hidden" aria-labelledby="towerHeading">
       <div class="tower-intro">
@@ -36,7 +39,7 @@
         <p>Start small at the bottom. Go big at the top.</p>
       </div>
 
-      <div class="tower-stage">
+      <div id="towerStage" class="tower-stage">
         <section class="tower-frame player-frame" aria-labelledby="yourTowerHeading">
           <header class="tower-cap"><div class="rainbow-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div><h2 id="yourTowerHeading">Your tower</h2><span id="towerPlayerName"></span></header>
           <div class="tower-edge"><span>TOP · 6</span><strong id="yourHighLabel"></strong></div>
@@ -61,7 +64,7 @@
           <button id="refreshButton" class="secondary hidden" type="button">Load today’s tower</button>
         </section>
 
-        <section class="tower-frame answer-frame" aria-labelledby="answersHeading">
+        <section id="answerFrame" class="tower-frame answer-frame hidden" aria-labelledby="answersHeading">
           <header class="tower-cap"><div class="rainbow-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><h2 id="answersHeading">Correct answers</h2><span id="answerSubtitle">Revealed when you lock in</span></header>
           <div class="tower-edge"><span>TOP · 6</span><strong id="answerHighLabel"></strong></div>
           <ol id="answerTower" class="tower-stack" reversed aria-label="Correct ranking, highest at the top"></ol>
@@ -81,11 +84,29 @@
 
     <section id="exhaustedCard" class="card exhausted-card hidden">
       <div class="eyebrow">EVERY TOWER IS A FIRST</div><h1>You’ve reached the summit.</h1>
-      <p>All 100 challenges have appeared. New towers will be available when more questions are added.</p>
+      <p>Every available question at this level has appeared. Try another difficulty, or come back when more questions are added.</p>
       <a class="back-link" href="/">Explore the other daily games →</a>
     </section>
     <footer class="tower-footer">A little knowledge. A little instinct. A new climb every day.</footer>
   </main>
-  <script src="/tower/script.js?v=2"></script>
+  <dialog id="rulesDialog" class="rules-dialog" aria-labelledby="rulesTitle">
+    <div class="eyebrow">WELCOME TO TRIVIA TOWER</div>
+    <h2 id="rulesTitle">Six things. One correct order.</h2>
+    <p>Use your knowledge and a little instinct to build the daily tower.</p>
+    <ol class="rules-steps">
+      <li><strong>Read the question.</strong> Put the smallest, earliest, or lowest item at the bottom (1), and the largest, latest, or highest at the top (6).</li>
+      <li><strong>Build your tower.</strong> Drag the rows, tap their arrow buttons, or focus a row and use your keyboard arrows.</li>
+      <li><strong>Lock it in.</strong> You get one submission per difficulty each day. Your tower moves left and the answers appear on the right, one row at a time.</li>
+      <li><strong>Score every correct spot.</strong> Each exact placement counts, even if another row is wrong. Time never affects your score.</li>
+    </ol>
+    <div class="rules-scoring" aria-label="Points by difficulty">
+      <div><strong>Easy</strong><span id="rulesEasyPoints">100 points / spot</span></div>
+      <div><strong>Medium</strong><span id="rulesMediumPoints">150 points / spot</span></div>
+      <div><strong>Hard</strong><span id="rulesHardPoints">200 points / spot</span></div>
+    </div>
+    <p class="rules-reset">Three fresh challenges daily. Questions never repeat.</p>
+    <form method="dialog"><button class="lock-button" autofocus>Let’s build a tower</button></form>
+  </dialog>
+  <script src="/tower/script.js?v=3"></script>
 </body>
 </html>

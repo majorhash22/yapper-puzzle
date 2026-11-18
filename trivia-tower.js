@@ -3,6 +3,11 @@ const bank = require('./trivia-tower-puzzles');
 
 const POINTS_PER_PLACEMENT = 100;
 const ITEM_COUNT = 6;
+const DIFFICULTIES = {
+  easy: { label: 'Easy', pointsPerPlacement: 100 },
+  medium: { label: 'Medium', pointsPerPlacement: 150 },
+  hard: { label: 'Hard', pointsPerPlacement: 200 }
+};
 const ids = new Set();
 const titles = new Set();
 const puzzles = bank.map(puzzle => {
@@ -11,7 +16,7 @@ const puzzles = bank.map(puzzle => {
   }
   ids.add(puzzle.id);
   titles.add(puzzle.title);
-  if (!puzzle.title || !puzzle.category || !puzzle.lowLabel || !puzzle.highLabel || !puzzle.instructions ||
+  if (!Object.hasOwn(DIFFICULTIES, puzzle.difficulty) || !puzzle.title || !puzzle.category || !puzzle.lowLabel || !puzzle.highLabel || !puzzle.instructions ||
       !Array.isArray(puzzle.sources) || !puzzle.sources.length ||
       !puzzle.sources.every(source => source.title && /^https:\/\//.test(source.url)) ||
       !Array.isArray(puzzle.items) || puzzle.items.length !== ITEM_COUNT ||
@@ -44,14 +49,19 @@ function shuffledOrder(puzzle) {
   return order;
 }
 
-function ensureTowerDay(days, key, questions = puzzles) {
-  if (days[key]) return days[key];
+function ensureTowerDay(days, key, questions = puzzles, difficulty = 'medium') {
+  if (!Object.hasOwn(DIFFICULTIES, difficulty)) throw new Error('Unknown tower difficulty.');
+  // A previously published single tower remains the medium challenge, with
+  // its original shuffle, players, and 100-point scoring intact.
+  const storageKey = difficulty === 'medium' && days[key] ? key : `${key}:${difficulty}`;
+  if (days[storageKey]) return days[storageKey];
   // Never refill this pool. Even after the bank is exhausted, published IDs
   // stay reserved forever. Adding new IDs makes fresh questions available.
   const used = new Set(Object.values(days).map(day => day.puzzleId).filter(Boolean));
-  const available = questions.filter(puzzle => !used.has(puzzle.id));
+  const available = questions.filter(puzzle => puzzle.difficulty === difficulty && !used.has(puzzle.id));
   const puzzle = available.length ? available[crypto.randomInt(available.length)] : null;
-  return days[key] = {
+  return days[storageKey] = {
+    difficulty, pointsPerPlacement: DIFFICULTIES[difficulty].pointsPerPlacement,
     puzzleId: puzzle?.id || null,
     order: puzzle ? shuffledOrder(puzzle) : [],
     players: {}
@@ -73,17 +83,17 @@ function validOrder(puzzle, order) {
     order.every(id => puzzle.items.some(item => item.id === id));
 }
 
-function scoreOrder(puzzle, order) {
+function scoreOrder(puzzle, order, pointsPerPlacement = POINTS_PER_PLACEMENT) {
   if (!validOrder(puzzle, order)) throw new Error('Submit each item exactly once.');
   const expected = correctOrder(puzzle);
   const placements = order.map((id, index) => ({ id, position: index + 1, correct: id === expected[index] }));
   const correctPlacements = placements.filter(placement => placement.correct).length;
-  return { score: correctPlacements * POINTS_PER_PLACEMENT, correctPlacements, placements };
+  return { score: correctPlacements * pointsPerPlacement, correctPlacements, placements };
 }
 
 function revealResult(puzzle, player) {
   return {
-    ...scoreOrder(puzzle, player.order),
+    ...scoreOrder(puzzle, player.order, player.pointsPerPlacement || POINTS_PER_PLACEMENT),
     submittedOrder: player.order,
     correctOrder: correctOrder(puzzle),
     facts: puzzle.items.map(({ id, label, valueLabel }) => ({ id, label, valueLabel })),
@@ -92,6 +102,6 @@ function revealResult(puzzle, player) {
 }
 
 module.exports = {
-  puzzles, ITEM_COUNT, POINTS_PER_PLACEMENT, ensureTowerDay,
+  puzzles, ITEM_COUNT, POINTS_PER_PLACEMENT, DIFFICULTIES, ensureTowerDay,
   correctOrder, publicTowerPuzzle, validOrder, scoreOrder, revealResult
 };

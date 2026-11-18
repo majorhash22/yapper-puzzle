@@ -202,4 +202,23 @@ add('fractions', 'A slice of the whole', 'Numbers', 'Smallest fraction', 'Larges
 add('scrabble-values', 'Letters worth their weight', 'Games', 'Fewest tile points', 'Most tile points', 'scrabble', 'points', [['A',1],['D',2],['B',3],['F',4],['K',5],['Q',10]], 'Standard English-language Scrabble tile values, before board bonuses.');
 add('us-coin-values', 'Small change', 'Everyday', 'Lowest face value', 'Highest face value', 'coins', 'U.S. cents', [['Penny',1],['Nickel',5],['Dime',10],['Quarter',25],['Half dollar',50],['Dollar coin',100]]);
 
-module.exports = puzzles;
+// Classify the original bank without changing any published IDs or facts.
+const easy = new Set([
+  'planet-diameters', 'planet-distances', 'space-firsts', 'atomic-numbers', 'mineral-hardness',
+  'rainbow-wavelength', 'continent-area', 'flag-stars', 'early-presidents', 'computing-debuts',
+  'world-milestones', 'pixar-premieres', 'disney-premieres', 'star-wars-premieres', 'marvel-premieres',
+  'potter-publication', 'narnia-publication', 'nintendo-hardware', 'playstation-hardware', 'pokedex-numbers',
+  'track-distances', 'team-sizes', 'swimming-distances', 'roman-numerals', 'big-numbers', 'metric-lengths',
+  'time-units', 'binary-storage', 'note-lengths', 'temperature-benchmarks', 'fractions', 'scrabble-values', 'us-coin-values'
+]);
+const hard = new Set([
+  'planet-densities', 'planet-days', 'escape-speeds', 'orbital-speeds', 'planet-tilts', 'star-types',
+  'metal-densities', 'melting-metals', 'noble-boiling', 'atomic-masses', 'electronegativity', 'ionisation-energy',
+  'element-discoveries', 'paleozoic-periods', 'particle-masses', 'half-lives', 'clock-offsets', 'amendment-dates',
+  'apollo-landings', 'physics-nobels', 'director-births', 'throwing-weights', 'polygon-sides', 'solid-vertices',
+  'polygon-diagonals', 'interior-angles', 'factorials', 'si-prefixes', 'customary-lengths', 'energy-units',
+  'pressure-units', 'angle-measures', 'kitchen-volumes', 'area-units'
+]);
+for (const puzzle of puzzles) puzzle.difficulty = easy.has(puzzle.id) ? 'easy' : hard.has(puzzle.id) ? 'hard' : 'medium';
+
+module.exports = [...puzzles, ...require('./trivia-tower-extra-puzzles')];
