@@ -1,5 +1,14 @@
 const crypto = require('node:crypto');
-const bank = require('./trivia-tower-puzzles');
+const originalBank = require('./trivia-tower-puzzles');
+const contentUpdate = require('./trivia-tower-refresh');
+const retiredIds = new Set(contentUpdate.retiredIds);
+if (retiredIds.size !== contentUpdate.retiredIds.length ||
+    contentUpdate.puzzles.length !== retiredIds.size ||
+    contentUpdate.retiredIds.some(id => !originalBank.some(puzzle => puzzle.id === id))) {
+  throw new Error('Trivia Tower replacements must match the retired questions one for one.');
+}
+const activeBank = [...originalBank.filter(puzzle => !retiredIds.has(puzzle.id)), ...contentUpdate.puzzles];
+const archivedBank = originalBank.filter(puzzle => retiredIds.has(puzzle.id));
 
 const POINTS_PER_PLACEMENT = 100;
 const ITEM_COUNT = 6;
@@ -11,7 +20,7 @@ const DIFFICULTIES = {
 };
 const ids = new Set();
 const titles = new Set();
-const puzzles = bank.map(puzzle => {
+const allPuzzles = [...activeBank, ...archivedBank].map(puzzle => {
   if (!/^[a-z0-9-]+$/.test(puzzle.id) || ids.has(puzzle.id) || titles.has(puzzle.title)) {
     throw new Error(`Duplicate or invalid Trivia Tower question: ${puzzle.id}`);
   }
@@ -35,6 +44,42 @@ const puzzles = bank.map(puzzle => {
     }))
   };
 });
+const puzzles = allPuzzles.slice(0, activeBank.length);
+const retiredPuzzles = allPuzzles.slice(activeBank.length);
+const byId = new Map(allPuzzles.map(puzzle => [puzzle.id, puzzle]));
+function getPuzzle(id) { return byId.get(id); }
+
+function refreshDailyTowers(db, key, questions = puzzles) {
+  const refresh = contentUpdate.refresh;
+  if (key !== refresh.date || db.towerContentRefreshes?.[refresh.id]) return false;
+  const nextDays = { ...db.towerDays };
+  const resetPlayers = new Set();
+  const canonicalKeys = new Set([key, ...Object.keys(DIFFICULTIES).map(difficulty => `${key}:${difficulty}`)]);
+  for (const [savedKey, day] of Object.entries(nextDays)) {
+    if (savedKey !== key && !savedKey.startsWith(`${key}:`)) continue;
+    for (const userId of Object.keys(day.players || {})) resetPlayers.add(userId);
+    const cleared = { ...day, players: {} };
+    if (canonicalKeys.has(savedKey)) {
+      if (day.puzzleId) nextDays[`${key}:content-refresh:${day.puzzleId}`] = { ...cleared, retiredReason: 'content-refresh' };
+      delete nextDays[savedKey];
+    } else nextDays[savedKey] = cleared;
+  }
+  const used = new Set(Object.values(nextDays).map(day => day.puzzleId).filter(Boolean));
+  const newIds = new Set(contentUpdate.puzzles.map(puzzle => puzzle.id));
+  for (const difficulty of Object.keys(DIFFICULTIES)) {
+    const preferred = questions.find(puzzle => puzzle.id === refresh.showcase[difficulty] && puzzle.difficulty === difficulty && !used.has(puzzle.id));
+    const fresh = questions.filter(puzzle => newIds.has(puzzle.id) && puzzle.difficulty === difficulty && !used.has(puzzle.id));
+    const candidates = preferred ? [preferred] : fresh.length ? fresh : questions;
+    const day = ensureTowerDay(nextDays, key, candidates, difficulty);
+    if (day.puzzleId) used.add(day.puzzleId);
+  }
+  // Commit all three new towers and the reset marker together. Restarts and
+  // later requests cannot erase scores earned after this refresh.
+  db.towerDays = nextDays;
+  db.towerContentRefreshes = { ...db.towerContentRefreshes,
+    [refresh.id]: { date: key, appliedAt: new Date().toISOString(), resetPlayerCount: resetPlayers.size } };
+  return true;
+}
 
 function correctOrder(puzzle) {
   return [...puzzle.items].sort((a, b) => a.value - b.value).map(item => item.id);
@@ -121,6 +166,7 @@ function revealResult(puzzle, player) {
 }
 
 module.exports = {
-  puzzles, ITEM_COUNT, POINTS_PER_PLACEMENT, DIFFICULTIES, SCORING_VERSION, ensureTowerDay, scoreForPlacements,
+  puzzles, retiredPuzzles, getPuzzle, CONTENT_REFRESH: contentUpdate.refresh, refreshDailyTowers,
+  ITEM_COUNT, POINTS_PER_PLACEMENT, DIFFICULTIES, SCORING_VERSION, ensureTowerDay, scoreForPlacements,
   correctOrder, publicTowerPuzzle, validOrder, scoreOrder, revealResult
 };

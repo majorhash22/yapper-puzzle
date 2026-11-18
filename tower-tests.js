@@ -7,8 +7,14 @@ const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const tower = require('./trivia-tower');
 
-assert.equal(tower.puzzles.length, 300, 'Keep the original 100 and add 200 different questions');
+assert.equal(tower.puzzles.length, 300, 'The refreshed playable bank stays at exactly 300 questions');
 assert.equal(require('./trivia-tower-extra-puzzles').length, 200);
+const refreshPack = require('./trivia-tower-refresh');
+assert.equal(refreshPack.puzzles.length, 175); assert.equal(tower.retiredPuzzles.length, 175);
+for (const id of refreshPack.retiredIds) {
+  assert.ok(!tower.puzzles.some(puzzle => puzzle.id === id), `${id} must leave the playable pool`);
+  assert.equal(tower.getPuzzle(id).id, id, 'Retired questions remain readable for saved-game compatibility');
+}
 const labelSets = new Set();
 for (const puzzle of tower.puzzles) {
   const key = puzzle.items.map(item => item.label.toLowerCase()).sort().join('|');
@@ -18,10 +24,9 @@ for (const puzzle of tower.puzzles) {
 const counts = Object.fromEntries(Object.keys(tower.DIFFICULTIES).map(difficulty => [difficulty, tower.puzzles.filter(puzzle => puzzle.difficulty === difficulty).length]));
 for (const count of Object.values(counts)) assert.ok(count >= 30, 'Every level needs a substantial question pool');
 for (const [id, difficulty] of Object.entries({
-  'calendar-months': 'easy', 'animal-legs': 'easy', 'small-polygons': 'easy', 'cubes-mixed': 'easy',
-  'atomic-numbers': 'medium', 'country-area': 'medium', 'rainbow-wavelength': 'medium',
-  'chess-piece-mobility': 'medium', 'solid-face-counts': 'medium',
-  'moon-sizes': 'hard', 'binary-storage': 'hard', 'saturn-moon-densities': 'hard', 'network-port-numbers': 'hard'
+  'wildlife-size': 'easy', 'animal-legs': 'easy', 'lion-king-story': 'easy', 'frozen-story': 'easy',
+  'spicy-peppers': 'medium', 'country-area': 'medium', 'minecraft-mob-health': 'medium',
+  'moon-sizes': 'hard', 'famous-ships-lengths': 'hard', 'giant-lego-builds': 'hard'
 })) assert.equal(tower.puzzles.find(puzzle => puzzle.id === id).difficulty, difficulty, `${id} needs the reviewed difficulty`);
 for (const puzzle of tower.puzzles) {
   assert.match(puzzle.instructions, /^Put /);
@@ -31,10 +36,10 @@ for (const puzzle of tower.puzzles) {
 assert.equal(tower.puzzles.find(puzzle => puzzle.id === 'country-area').instructions,
   'Put the country with the smallest area at the bottom and the largest area at the top.');
 assert.ok(new Set(tower.puzzles.map(puzzle => puzzle.category)).size >= 10, 'Questions should cover varied subjects');
-const shapes = tower.puzzles.find(puzzle => puzzle.id === 'polygon-sides');
-const expected = ['Hendecagon', 'Tetradecagon', 'Pentadecagon', 'Heptadecagon', 'Octadecagon', 'Icosagon'];
+const shapes = tower.puzzles.find(puzzle => puzzle.id === 'famous-ships-lengths');
+const expected = ['Cutty Sark', 'Bismarck', 'RMS Titanic', 'RMS Queen Mary', 'Queen Mary 2', 'Seawise Giant'];
 const perfect = expected.map(label => shapes.items.find(item => item.label === label).id);
-assert.deepEqual(tower.correctOrder(shapes), perfect, 'The screenshot example must have an accurate bottom-to-top answer');
+assert.deepEqual(tower.correctOrder(shapes), perfect, 'The ship comparison must have an accurate bottom-to-top answer');
 assert.equal(tower.scoreOrder(shapes, perfect).score, 600);
 assert.equal(tower.scoreOrder(shapes, [...perfect].reverse()).score, 0);
 const partial = [...perfect];
@@ -91,6 +96,47 @@ for (const puzzle of tower.puzzles) {
   assert.notDeepEqual(day.order, tower.correctOrder(puzzle), 'A fresh tower must not start already solved');
 }
 
+// The content refresh resets only the explicitly authorized date, once. Old
+// question reservations and every earlier date stay intact.
+const refreshDate = tower.CONTENT_REFRESH.date;
+const retiredQuestion = tower.getPuzzle('calendar-months');
+const retiredOrder = tower.correctOrder(retiredQuestion);
+const savedDay = (puzzleId, players = {}) => ({ puzzleId, order: tower.correctOrder(tower.getPuzzle(puzzleId)), players });
+const historical = savedDay('calendar-months', { alice: { order: retiredOrder, score: 600, correctPlacements: 6 } });
+const resetDb = {
+  users: { alice: { displayName: 'Alice' }, bob: { displayName: 'Bob' } },
+  days: { [refreshDate]: { players: { alice: { totalScore: 3000 } } } },
+  towerDays: {
+    '2026-11-17': historical,
+    [refreshDate]: savedDay('atomic-numbers', { alice: { score: 800 } }),
+    [`${refreshDate}:easy`]: savedDay('calendar-months', { alice: { score: 600 }, bob: { score: 400 } }),
+    [`${refreshDate}:hard`]: savedDay('polygon-sides', { bob: { score: 1200 } }),
+    [`${refreshDate}:retired:earlier-question`]: savedDay('roman-numerals', { alice: { score: 600 } })
+  }
+};
+const beforeOtherData = JSON.stringify({ users: resetDb.users, days: resetDb.days, historical });
+assert.equal(tower.refreshDailyTowers(resetDb, '2026-11-19'), false, 'A later day cannot trigger the dated reset');
+assert.equal(tower.refreshDailyTowers(resetDb, refreshDate), true);
+assert.equal(resetDb.towerContentRefreshes[tower.CONTENT_REFRESH.id].resetPlayerCount, 2);
+assert.equal(JSON.stringify({ users: resetDb.users, days: resetDb.days, historical: resetDb.towerDays['2026-11-17'] }), beforeOtherData);
+for (const [key, day] of Object.entries(resetDb.towerDays)) {
+  if (key === refreshDate || key.startsWith(`${refreshDate}:`)) assert.deepEqual(day.players, {}, 'Every current-day score and attempt is cleared, including retired selections');
+}
+for (const [difficulty, id] of Object.entries(tower.CONTENT_REFRESH.showcase)) {
+  const day = resetDb.towerDays[`${refreshDate}:${difficulty}`];
+  assert.equal(day.puzzleId, id); assert.equal(tower.getPuzzle(id).difficulty, difficulty);
+}
+for (const id of ['calendar-months','atomic-numbers','polygon-sides','roman-numerals']) {
+  assert.ok(Object.values(resetDb.towerDays).some(day => day.puzzleId === id), 'Removed selections stay reserved against future reuse');
+}
+resetDb.towerDays[`${refreshDate}:easy`].players.alice = { score: 400 };
+const restartedDb = JSON.parse(JSON.stringify(resetDb));
+assert.equal(tower.refreshDailyTowers(restartedDb, refreshDate), false);
+assert.equal(restartedDb.towerDays[`${refreshDate}:easy`].players.alice.score, 400, 'A restart cannot wipe points earned after the reset');
+const usedShowcaseDb = { towerDays: { '2026-11-17': savedDay('wildlife-size') } };
+tower.refreshDailyTowers(usedShowcaseDb, refreshDate);
+assert.notEqual(usedShowcaseDb.towerDays[`${refreshDate}:easy`].puzzleId, 'wildlife-size', 'A refresh cannot recycle an already used showcase question');
+
 function today() {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: process.env.APP_TIMEZONE || 'America/Regina', year: 'numeric', month: '2-digit', day: '2-digit'
@@ -127,10 +173,24 @@ async function request(base, route, body, status = 200) {
   assert.equal(response.status, status, route); return response.json();
 }
 
+async function liveScore(reader, score) {
+  const decoder = new TextDecoder(); let content = '';
+  const timeout = setTimeout(() => reader.cancel(), 5000);
+  try {
+    while (!content.includes(`"score":${score}`)) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      content += decoder.decode(value, { stream: true });
+    }
+    assert.match(content, /"game":"tower"/);
+    assert.ok(content.includes(`"score":${score}`), 'The live stream must deliver the new combined score');
+  } finally { clearTimeout(timeout); await reader.cancel(); }
+}
+
 async function main() {
   const mediumPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'country-area');
-  const easyPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'calendar-months');
-  const hardPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'polygon-sides');
+  const easyPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'lion-king-story');
+  const hardPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'famous-ships-lengths');
   const fixtures = { easy: easyPuzzle, medium: mediumPuzzle, hard: hardPuzzle };
   const mediumPerfect = tower.correctOrder(mediumPuzzle);
   const mediumPartial = [...mediumPerfect]; [mediumPartial[0], mediumPartial[1]] = [mediumPartial[1], mediumPartial[0]];
@@ -140,6 +200,7 @@ async function main() {
   const published = puzzle => ({ puzzleId: puzzle.id, order: [...tower.correctOrder(puzzle)].reverse(), players: {} });
   fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify({
     users: {}, days: {}, chainDays: {}, chainlyDays: {},
+    towerContentRefreshes: { [tower.CONTENT_REFRESH.id]: { date: tower.CONTENT_REFRESH.date } },
     towerDays: { [date]: published(mediumPuzzle), [`${date}:easy`]: published(easyPuzzle), [`${date}:hard`]: published(hardPuzzle) }
   }));
   let running;
@@ -154,7 +215,7 @@ async function main() {
     assert.match(html, /<dialog id="rulesDialog"/); assert.match(html, /difficultyPicker/);
     assert.match(html, /dailyScore/); assert.match(html, /nextLevelButton/);
     assert.match(await (await fetch(base)).text(), /Play Trivia Tower/);
-    for (const file of ['trivia-tower-puzzles.js', 'trivia-tower-extra-puzzles.js', 'trivia-tower-content.js']) {
+    for (const file of ['trivia-tower-puzzles.js', 'trivia-tower-extra-puzzles.js', 'trivia-tower-content.js', 'trivia-tower-refresh.js']) {
       assert.equal((await fetch(`${base}/${file}`)).status, 404, 'The answer bank stays server-side');
     }
     await request(base, '/api/tower/state?userId=missing', undefined, 404);
@@ -191,8 +252,7 @@ async function main() {
     assert.equal(easyResult.result.score, 400); assert.equal(easyResult.totalScore, 400);
     assert.equal(easyResult.completedLevels, 1); assert.equal(easyResult.nextDifficulty, 'medium');
     assert.deepEqual(easyResult.difficulties.map(level => level.locked), [false, false, true]);
-    let live = new TextDecoder().decode((await reader.read()).value); await reader.cancel();
-    assert.match(live, /"game":"tower"/); assert.match(live, /"score":400/);
+    await liveScore(reader, 400);
     assert.equal((await state(alice.userId)).difficulty, 'medium', 'Refresh resumes the next unfinished level');
     await request(base, '/api/tower/submit', body(alice.userId, 'hard'), 403);
     const zero = await request(base, '/api/tower/submit', body(bob.userId, 'easy', [...tower.correctOrder(easyPuzzle)].reverse()));
@@ -214,8 +274,7 @@ async function main() {
     assert.equal(hardResult.nextDifficulty, null); assert.equal(hardResult.completedLevels, 3);
     const aliceRow = hardResult.leaderboard.find(row => row.userId === alice.userId);
     assert.equal(aliceRow.score, 2133); assert.equal(aliceRow.completedLevels, 3); assert.equal(aliceRow.correctPlacements, 14);
-    live = new TextDecoder().decode((await reader.read()).value); await reader.cancel();
-    assert.match(live, /"score":2133/, 'Hard completion broadcasts the combined score');
+    await liveScore(reader, 2133);
     const duplicate = await request(base, '/api/tower/submit', body(alice.userId, 'medium'));
     assert.equal(duplicate.result.score, 533); assert.equal(duplicate.totalScore, 2133, 'Retries cannot double-count or improve a locked level');
     assert.equal((await state(alice.userId, 'easy')).totalScore, 2133, 'Revisiting a completed level preserves the daily total');
@@ -284,7 +343,38 @@ async function main() {
     const exhausted = await state(alice.userId);
     assert.equal(exhausted.exhausted, true); assert.equal(exhausted.puzzle, null);
     assert.equal(exhausted.totalScore, 0); assert.equal(exhausted.result, null); assert.equal(exhausted.leaderboard.length, 0);
-    console.log('Passed: 300 reviewed questions, no repeats, Easy → Medium → Hard enforced by the server, zero-score unlocks, locked-question privacy, combined 2600-point daily scores and standings, immutable attempts, tied ranks, live totals, migration, exhaustion, and restart persistence.');
+    if (date === refreshDate) {
+      await stop(running.child);
+      const oldPublished = id => {
+        const puzzle = tower.getPuzzle(id); const order = tower.correctOrder(puzzle);
+        return { puzzleId: id, order, players: { [alice.userId]: { order, score: 600, correctPlacements: 6 }, [bob.userId]: { order, score: 400, correctPlacements: 4 } } };
+      };
+      saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
+      const rebusBeforeReset = JSON.stringify(saved.days);
+      saved.towerContentRefreshes = {};
+      saved.towerDays = { '2026-11-17': oldPublished('roman-numerals'),
+        [date]: oldPublished('atomic-numbers'), [`${date}:easy`]: oldPublished('calendar-months'), [`${date}:hard`]: oldPublished('polygon-sides') };
+      fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify(saved));
+      running = await launch(dataDir, port); base = running.base;
+      for (const userId of [alice.userId, bob.userId]) {
+        const reset = await state(userId);
+        assert.equal(reset.totalScore, 0); assert.equal(reset.completedLevels, 0); assert.equal(reset.result, null);
+        assert.equal(reset.difficulty, 'easy'); assert.equal(reset.puzzle.id, 'wildlife-size');
+        assert.deepEqual(reset.difficulties.map(level => level.locked), [false, true, true]);
+        assert.equal(reset.leaderboard.length, 0); assert.equal(reset.contentRevision, tower.CONTENT_REFRESH.id);
+      }
+      await request(base, '/api/tower/submit', { userId: alice.userId, date, difficulty: 'easy', puzzleId: 'calendar-months', order: retiredOrder }, 409);
+      const newEasy = await state(alice.userId);
+      const newEasyPuzzle = tower.getPuzzle(newEasy.puzzle.id);
+      const playedAfterReset = await request(base, '/api/tower/submit', { userId: alice.userId, date, difficulty: 'easy', puzzleId: newEasyPuzzle.id, order: tower.correctOrder(newEasyPuzzle) });
+      assert.equal(playedAfterReset.totalScore, 600);
+      await stop(running.child); running = await launch(dataDir, port); base = running.base;
+      assert.equal((await state(alice.userId)).totalScore, 600, 'Production startup migration runs once, not on every restart');
+      const persistedReset = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
+      assert.equal(JSON.stringify(persistedReset.days), rebusBeforeReset);
+      assert.equal(persistedReset.towerDays['2026-11-17'].players[alice.userId].score, 600);
+    }
+    console.log('Passed: exactly 300 active questions with 175 fresh replacements, archived compatibility, nonrepeating selection, one-time date-scoped reset for all players, fresh showcase towers, earlier days and Rebus preserved, progression, accumulated scores, live standings, and restart persistence.');
   } finally {
     if (running) await stop(running.child);
     const resolved = fs.realpathSync(dataDir);

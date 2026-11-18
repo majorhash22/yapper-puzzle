@@ -54,6 +54,7 @@ if ((process.env.RAILWAY_SERVICE_ID || process.env.RAILWAY_ENVIRONMENT_ID) && !p
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.accessSync(DATA_DIR, fs.constants.R_OK | fs.constants.W_OK);
 let db = loadDb();
+if (tower.refreshDailyTowers(db, dayKey())) saveDb();
 
 function loadDb() {
   if (fs.existsSync(DATA_FILE)) {
@@ -295,7 +296,7 @@ function towerDay(key, difficulty = 'medium') {
   if (needsScoringUpdate) {
     day.difficulty = difficulty; day.maxScore = maxScore; day.scoringVersion = tower.SCORING_VERSION;
     delete day.pointsPerPlacement;
-    const puzzle = tower.puzzles.find(question => question.id === day.puzzleId);
+    const puzzle = tower.getPuzzle(day.puzzleId);
     for (const player of Object.values(day.players)) {
       const result = tower.scoreOrder(puzzle, player.order, maxScore);
       Object.assign(player, { maxScore, score: result.score, correctPlacements: result.correctPlacements });
@@ -357,11 +358,12 @@ function towerState(userId, requestedDifficulty) {
   const selected = requested && !requested.locked ? requested : next || [...levels].reverse().find(level => level.finished) || levels[0];
   const difficulty = selected.id;
   const day = towerDay(key, difficulty);
-  const puzzle = tower.puzzles.find(question => question.id === day.puzzleId);
+  const puzzle = tower.getPuzzle(day.puzzleId);
   if (day.puzzleId && !puzzle) throw new Error('Missing Trivia Tower question referenced by a saved day.');
   const player = day.players[userId];
   return {
     game: 'tower', date: key, timeZone: APP_TIMEZONE,
+    contentRevision: db.towerContentRefreshes?.[tower.CONTENT_REFRESH.id]?.date === key ? tower.CONTENT_REFRESH.id : null,
     displayName: db.users[userId].displayName, exhausted: !puzzle, finished: Boolean(player),
     difficulty,
     difficulties: levels,
@@ -523,6 +525,10 @@ async function handleApi(req, res, url) {
     });
     res.write(': connected\n\n');
     sseClients.add(res);
+    const refresh = db.towerContentRefreshes?.[tower.CONTENT_REFRESH.id];
+    if (refresh?.date === dayKey()) {
+      res.write(`event: tower-reset\ndata: ${JSON.stringify({ date: refresh.date, revision: tower.CONTENT_REFRESH.id })}\n\n`);
+    }
     req.on('close', () => sseClients.delete(res));
     return;
   }
@@ -574,7 +580,7 @@ async function handleApi(req, res, url) {
     }
     if (!day.puzzleId) return json(res, 409, { error: 'All available towers have been played. New questions are on the way.' });
     if (day.players[userId]) return json(res, 200, towerState(userId, difficulty));
-    const puzzle = tower.puzzles.find(question => question.id === day.puzzleId);
+    const puzzle = tower.getPuzzle(day.puzzleId);
     if (!tower.validOrder(puzzle, body.order)) {
       return json(res, 400, { error: 'Place all six items in the tower exactly once.' });
     }

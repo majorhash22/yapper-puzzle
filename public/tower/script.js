@@ -267,6 +267,7 @@ function render(nextState, { animateReveal = false } = {}) {
   $('exhaustedCard').classList.toggle('hidden', !state.exhausted);
   $('towerGame').classList.toggle('hidden', state.exhausted);
   $('dailyDate').textContent = `${state.date} · ${state.timeZone}`;
+  $('contentRefreshNotice').classList.toggle('hidden', !state.contentRevision);
   renderDifficulties();
   if (state.exhausted) return;
   $('towerStage').classList.toggle('is-locked', state.finished);
@@ -382,6 +383,12 @@ $('nextLevelButton').addEventListener('click', async () => {
   await load(state.nextDifficulty);
 });
 const events = new EventSource('/api/events');
+events.addEventListener('tower-reset', event => {
+  try {
+    const reset = JSON.parse(event.data);
+    if (state && reset.date === state.date && reset.revision !== state.contentRevision) load();
+  } catch {}
+});
 events.addEventListener('leaderboard', event => {
   try {
     const payload = JSON.parse(event.data);

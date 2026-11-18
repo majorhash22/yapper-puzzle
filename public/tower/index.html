@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#181425" />
   <title>Trivia Tower · Yappers Puzzle</title>
   <link rel="stylesheet" href="/styles.css?v=9" />
-  <link rel="stylesheet" href="/tower/styles.css?v=5" />
+  <link rel="stylesheet" href="/tower/styles.css?v=6" />
 </head>
 <body class="tower-page">
   <main class="tower-shell">
@@ -29,6 +29,7 @@
 
     <p id="pageMessage" class="page-message" role="status">Getting today’s tower ready…</p>
     <button id="retryButton" class="secondary hidden" type="button">Try again</button>
+    <p id="contentRefreshNotice" class="refresh-notice hidden" role="status">New trivia today. Everyone’s Trivia Tower scores and level progress were reset for the new set.</p>
     <nav id="difficultyPicker" class="difficulty-picker hidden" aria-label="Daily tower difficulty"></nav>
     <p id="difficultyMessage" class="difficulty-message hidden" role="status"></p>
     <div id="dailyProgress" class="daily-progress hidden" aria-label="Your combined daily score">
@@ -104,6 +105,6 @@
     <p class="rules-reset">Up to 2,600 points each day. The leaderboard combines all three levels.</p>
     <form method="dialog"><button class="lock-button" autofocus>Let’s build a tower</button></form>
   </dialog>
-  <script src="/tower/script.js?v=5"></script>
+  <script src="/tower/script.js?v=6"></script>
 </body>
 </html>

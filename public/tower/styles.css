@@ -66,6 +66,7 @@
 .difficulty-option[aria-pressed="true"] { background:#c8f064; border-color:#c8f064; color:#172013; }.difficulty-option[aria-pressed="true"] span { color:#394c24; }
 .difficulty-option:focus-visible,.rules-button:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 .difficulty-message { text-align:center; color:#bcb6cb; font-size:.78rem; margin:0 0 8px; }
+.refresh-notice { max-width:680px; margin:20px auto; padding:12px 16px; border:1px solid #b2ddb34d; border-radius:12px; background:#243c3180; color:#ddf2db; text-align:center; font-size:.82rem; line-height:1.5; }
 .difficulty-option:disabled { cursor:default; }.difficulty-option:disabled:not([aria-pressed="true"]) { opacity:.55; }
 .daily-progress { max-width:600px; margin:18px auto 0; padding:15px 20px; background:#17171b90; border:1px solid #ffffff24; border-radius:14px; text-align:center; }
 .daily-progress > div { display:flex; justify-content:center; align-items:baseline; flex-wrap:wrap; gap:8px; }

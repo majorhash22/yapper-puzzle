@@ -56,6 +56,7 @@ async function page({ storage = new Map(), reducedMotion = false, savedPlayers =
     const puzzle = tower.puzzles.find(question => question.difficulty === difficulty);
     fixtures[difficulty] = { puzzle, day: tower.ensureTowerDay({}, '2030-01-01', [puzzle], difficulty), player: savedPlayers[difficulty] || null, ...config };
   }
+  let contentRevision = null;
   function state(requestedDifficulty) {
     const levels = Object.entries(fixtures).map(([id, level]) => ({ id, label: level.label, maxScore: level.maxScore,
       finished: Boolean(level.player), exhausted: false,
@@ -73,7 +74,7 @@ async function page({ storage = new Map(), reducedMotion = false, savedPlayers =
     const totalScore = levels.reduce((sum, level) => sum + level.score, 0);
     const correctPlacements = Object.values(fixtures).reduce((sum, level) => sum + (level.player ? tower.scoreOrder(level.puzzle, level.player.order, level.maxScore).correctPlacements : 0), 0);
     return {
-      date: '2030-01-01', timeZone: 'America/Regina', displayName: 'UI Player', difficulty,
+      date: '2030-01-01', timeZone: 'America/Regina', displayName: 'UI Player', difficulty, contentRevision,
       difficulties: levels, totalScore, dailyMaxScore: 2600, completedLevels, nextDifficulty: next?.id || null,
       maxScore: level.maxScore,
       finished: Boolean(level.player), exhausted: false, puzzle: tower.publicTowerPuzzle(level.puzzle, level.day),
@@ -106,7 +107,18 @@ async function page({ storage = new Map(), reducedMotion = false, savedPlayers =
   return { elements, storage, fixtures, animations, call: code => vm.runInContext(code, context),
     fail: value => { failure = value; },
     tick: () => { const [id, callback] = timers.entries().next().value; timers.delete(id); callback(); },
-    emitLeaderboard: payload => eventHandlers.leaderboard({ data: JSON.stringify(payload) })
+    emitLeaderboard: payload => eventHandlers.leaderboard({ data: JSON.stringify(payload) }),
+    emitReset: async () => {
+      eventHandlers['tower-reset']({ data: JSON.stringify({ date: '2030-01-01', revision: tower.CONTENT_REFRESH.id }) });
+      await new Promise(resolve => setImmediate(resolve));
+    },
+    refreshContent: () => {
+      for (const fixture of Object.values(fixtures)) fixture.player = null;
+      const puzzle = tower.getPuzzle('wildlife-size');
+      fixtures.easy.puzzle = puzzle;
+      fixtures.easy.day = tower.ensureTowerDay({}, '2030-01-01', [puzzle], 'easy');
+      contentRevision = tower.CONTENT_REFRESH.id;
+    }
   };
 }
 
@@ -131,6 +143,7 @@ async function main() {
   assert.equal(el.questionInstructions.textContent, app.call('state.puzzle.instructions'));
   assert.equal(el.questionTitle, undefined); assert.equal(el.questionCategory, undefined);
   assert.equal(el.dailyScore.textContent, '0');
+  assert.equal(el.contentRefreshNotice.classList.contains('hidden'), true);
   assert.equal(el.difficultyPicker.children[1].disabled, true); assert.equal(el.difficultyPicker.children[2].disabled, true);
   await el.difficultyPicker.children[2].click(); assert.equal(app.call('difficulty'), 'easy', 'Hard stays locked before finishing Easy');
   const firstDraft = app.call('order.join()');
@@ -199,11 +212,23 @@ async function main() {
   ] });
   assert.equal(el.towerLeaderboard.children.length, 2, 'Combined live standings update while viewing a different level');
 
+  app.refreshContent(); await app.emitReset();
+  assert.equal(app.call('state.puzzle.id'), 'wildlife-size'); assert.equal(app.call('difficulty'), 'easy');
+  assert.equal(el.dailyScore.textContent, '0'); assert.equal(el.dailyLevelProgress.textContent, '0/3 levels finished');
+  assert.equal(el.contentRefreshNotice.classList.contains('hidden'), false);
+  assert.equal(el.answerFrame.classList.contains('hidden'), true);
+  assert.equal(el.difficultyPicker.children[1].disabled, true); assert.equal(el.difficultyPicker.children[2].disabled, true);
+  assert.equal(el.towerLeaderboard.children.length, 1, 'The old leaderboard is replaced with the empty-state row');
+  await solve('easy'); await el.lockButton.click(); await el.skipRevealButton.click();
+  assert.equal(el.dailyScore.textContent, '600');
+  await app.emitReset();
+  assert.equal(el.dailyScore.textContent, '600', 'Reconnecting with the same reset revision preserves newly earned points');
+
   const reduced = await page({ storage: new Map([['yappersPuzzleUserId', 'ui-player']]), reducedMotion: true });
   await reduced.elements.lockButton.click(); assert.equal(reduced.animations.length, 0);
   for (let count = 0; count < 6; count++) reduced.tick();
   assert.equal(reduced.call('revealedCount'), 6); assert.equal(reduced.call('revealing'), false);
   assert.equal(reduced.elements.nextLevelButton.textContent, 'Continue to Medium');
-  console.log('Passed: rules, locked levels, failed attempts, draft restoration, ordered progression, Continue buttons, accumulated daily score throughout reveals, combined live standings, no duplicate points, daily reset, saved results, and reduced motion (DOM interaction checks).');
+  console.log('Passed: rules, locked levels, failed attempts, drafts, progression, cumulative reveals, combined standings, one-time content reset and reconnect, saved results, and reduced motion (DOM interaction checks).');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
