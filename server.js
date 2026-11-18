@@ -306,24 +306,42 @@ function towerDay(key, difficulty = 'medium') {
   return day;
 }
 
-function towerSummary(userId, key) {
+function towerLevels(userId, key) {
   const levels = Object.keys(tower.DIFFICULTIES).map(difficulty => {
     const day = towerDay(key, difficulty);
-    return { difficulty, player: day.players[userId], exhausted: !day.puzzleId };
+    const player = day.players[userId];
+    return { id: difficulty, label: tower.DIFFICULTIES[difficulty].label, maxScore: day.maxScore,
+      finished: Boolean(player), exhausted: !day.puzzleId, score: player?.score || 0 };
   });
-  const completed = levels.filter(level => level.player).length;
+  return levels.map((level, index) => {
+    const prerequisite = levels.slice(0, index).find(previous => !previous.finished && !previous.exhausted);
+    return { ...level, locked: !level.finished && Boolean(prerequisite), unlockAfter: prerequisite?.label || null };
+  });
+}
+
+function towerSummary(userId, key) {
+  const levels = towerLevels(userId, key);
+  const completed = levels.filter(level => level.finished).length;
   return {
     id: 'tower', label: 'Trivia Tower', description: 'Rank six things from bottom to top.',
-    completed, total: levels.length, score: levels.reduce((sum, level) => sum + (level.player?.score || 0), 0),
-    finished: completed === levels.length, exhausted: levels.every(level => level.exhausted)
+    completed, total: levels.length, score: levels.reduce((sum, level) => sum + level.score, 0),
+    finished: levels.every(level => level.finished || level.exhausted), exhausted: levels.every(level => level.exhausted)
   };
 }
 
-function towerLeaderboard(key, difficulty = 'medium') {
-  const rows = Object.entries(towerDay(key, difficulty).players).map(([userId, player]) => ({
-    userId, displayName: db.users[userId]?.displayName || 'Anonymous',
-    score: player.score, correctPlacements: player.correctPlacements
-  })).sort((a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId));
+function towerLeaderboard(key) {
+  const totals = new Map();
+  for (const difficulty of Object.keys(tower.DIFFICULTIES)) {
+    for (const [userId, player] of Object.entries(towerDay(key, difficulty).players)) {
+      const row = totals.get(userId) || { userId, displayName: db.users[userId]?.displayName || 'Anonymous',
+        score: 0, correctPlacements: 0, completedLevels: 0 };
+      row.score += player.score;
+      row.correctPlacements += player.correctPlacements;
+      row.completedLevels += 1;
+      totals.set(userId, row);
+    }
+  }
+  const rows = [...totals.values()].sort((a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId));
   let rank = 1;
   return rows.slice(0, 100).map((row, index) => {
     if (index && row.score !== rows[index - 1].score) rank = index + 1;
@@ -331,8 +349,13 @@ function towerLeaderboard(key, difficulty = 'medium') {
   });
 }
 
-function towerState(userId, difficulty = 'medium') {
+function towerState(userId, requestedDifficulty) {
   const key = dayKey();
+  const levels = towerLevels(userId, key);
+  const next = levels.find(level => !level.finished && !level.exhausted && !level.locked);
+  const requested = levels.find(level => level.id === requestedDifficulty);
+  const selected = requested && !requested.locked ? requested : next || [...levels].reverse().find(level => level.finished) || levels[0];
+  const difficulty = selected.id;
   const day = towerDay(key, difficulty);
   const puzzle = tower.puzzles.find(question => question.id === day.puzzleId);
   if (day.puzzleId && !puzzle) throw new Error('Missing Trivia Tower question referenced by a saved day.');
@@ -341,21 +364,21 @@ function towerState(userId, difficulty = 'medium') {
     game: 'tower', date: key, timeZone: APP_TIMEZONE,
     displayName: db.users[userId].displayName, exhausted: !puzzle, finished: Boolean(player),
     difficulty,
-    difficulties: Object.entries(tower.DIFFICULTIES).map(([id, config]) => {
-      const level = towerDay(key, id);
-      return { id, label: config.label, finished: Boolean(level.players[userId]), exhausted: !level.puzzleId,
-        maxScore: level.maxScore };
-    }),
+    difficulties: levels,
+    totalScore: levels.reduce((sum, level) => sum + level.score, 0),
+    dailyMaxScore: levels.reduce((sum, level) => sum + level.maxScore, 0),
+    completedLevels: levels.filter(level => level.finished).length,
+    nextDifficulty: next?.id || null,
     maxScore: day.maxScore,
     puzzle: puzzle ? tower.publicTowerPuzzle(puzzle, day) : null,
     result: player ? tower.revealResult(puzzle, player) : null,
-    leaderboard: towerLeaderboard(key, difficulty)
+    leaderboard: towerLeaderboard(key)
   };
 }
 
-function sendTowerLeaderboard(difficulty) {
+function sendTowerLeaderboard() {
   const key = dayKey();
-  const payload = JSON.stringify({ game: 'tower', date: key, difficulty, leaderboard: towerLeaderboard(key, difficulty) });
+  const payload = JSON.stringify({ game: 'tower', date: key, leaderboard: towerLeaderboard(key) });
   for (const res of sseClients) res.write(`event: leaderboard\ndata: ${payload}\n\n`);
 }
 
@@ -523,8 +546,8 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/tower/state') {
     const userId = String(url.searchParams.get('userId') || '');
     if (!db.users[userId]) return json(res, 404, { error: 'Player not found.' });
-    const difficulty = url.searchParams.get('difficulty') || 'medium';
-    if (!Object.hasOwn(tower.DIFFICULTIES, difficulty)) return json(res, 400, { error: 'Choose Easy, Medium, or Hard.' });
+    const difficulty = url.searchParams.get('difficulty');
+    if (difficulty && !Object.hasOwn(tower.DIFFICULTIES, difficulty)) return json(res, 400, { error: 'Choose Easy, Medium, or Hard.' });
     return json(res, 200, towerState(userId, difficulty));
   }
 
@@ -532,7 +555,7 @@ async function handleApi(req, res, url) {
     const key = dayKey();
     const difficulty = url.searchParams.get('difficulty') || 'medium';
     if (!Object.hasOwn(tower.DIFFICULTIES, difficulty)) return json(res, 400, { error: 'Choose Easy, Medium, or Hard.' });
-    return json(res, 200, { game: 'tower', date: key, difficulty, leaderboard: towerLeaderboard(key, difficulty) });
+    return json(res, 200, { game: 'tower', date: key, leaderboard: towerLeaderboard(key) });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/tower/submit') {
@@ -540,8 +563,11 @@ async function handleApi(req, res, url) {
     const userId = String(body.userId || '');
     if (!db.users[userId]) return json(res, 404, { error: 'Player not found.' });
     const key = dayKey();
-    const difficulty = body.difficulty || 'medium';
+    const difficulty = body.difficulty || 'easy';
     if (!Object.hasOwn(tower.DIFFICULTIES, difficulty)) return json(res, 400, { error: 'Choose Easy, Medium, or Hard.' });
+    if (body.date !== key) return json(res, 409, { error: 'A new daily tower is ready. Refresh to play today’s question.' });
+    const level = towerLevels(userId, key).find(level => level.id === difficulty);
+    if (level.locked) return json(res, 403, { error: `Finish ${level.unlockAfter} before playing ${level.label}.` });
     const day = towerDay(key, difficulty);
     if (body.date !== key || body.puzzleId !== day.puzzleId) {
       return json(res, 409, { error: 'A new daily tower is ready. Refresh to play today’s question.' });
@@ -559,7 +585,7 @@ async function handleApi(req, res, url) {
     };
     saveDb();
     json(res, 200, towerState(userId, difficulty));
-    sendTowerLeaderboard(difficulty);
+    sendTowerLeaderboard();
     return;
   }
 

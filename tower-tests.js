@@ -128,67 +128,114 @@ async function request(base, route, body, status = 200) {
 }
 
 async function main() {
-  // Use a reviewed Medium question for a previously published Medium day.
-  const shapes = tower.puzzles.find(puzzle => puzzle.id === 'country-area');
-  const perfect = tower.correctOrder(shapes);
-  const partial = [...perfect]; [partial[0], partial[1]] = [partial[1], partial[0]];
+  const mediumPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'country-area');
+  const easyPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'calendar-months');
+  const hardPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'polygon-sides');
+  const fixtures = { easy: easyPuzzle, medium: mediumPuzzle, hard: hardPuzzle };
+  const mediumPerfect = tower.correctOrder(mediumPuzzle);
+  const mediumPartial = [...mediumPerfect]; [mediumPartial[0], mediumPartial[1]] = [mediumPartial[1], mediumPartial[0]];
+  const easyPartial = tower.correctOrder(easyPuzzle); [easyPartial[0], easyPartial[1]] = [easyPartial[1], easyPartial[0]];
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yappers-tower-test-'));
   const port = await freePort(); const date = today();
+  const published = puzzle => ({ puzzleId: puzzle.id, order: [...tower.correctOrder(puzzle)].reverse(), players: {} });
   fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify({
     users: {}, days: {}, chainDays: {}, chainlyDays: {},
-    towerDays: { [date]: { puzzleId: shapes.id, order: [...perfect].reverse(), players: {} } }
+    towerDays: { [date]: published(mediumPuzzle), [`${date}:easy`]: published(easyPuzzle), [`${date}:hard`]: published(hardPuzzle) }
   }));
   let running;
   try {
     running = await launch(dataDir, port); let base = running.base;
+    const body = (userId, difficulty, order = tower.correctOrder(fixtures[difficulty])) => ({
+      userId, difficulty, date, puzzleId: fixtures[difficulty].id, order, score: 999999, totalScore: 999999
+    });
+    const state = (userId, difficulty) => request(base, `/api/tower/state?userId=${userId}${difficulty ? `&difficulty=${difficulty}` : ''}`);
     const html = await (await fetch(`${base}/tower/index.html`)).text();
     assert.match(html, /Correct answers/); assert.match(html, /playerTower/);
     assert.match(html, /<dialog id="rulesDialog"/); assert.match(html, /difficultyPicker/);
+    assert.match(html, /dailyScore/); assert.match(html, /nextLevelButton/);
     assert.match(await (await fetch(base)).text(), /Play Trivia Tower/);
-    assert.equal((await fetch(`${base}/trivia-tower-puzzles.js`)).status, 404, 'Answer bank must not be served');
-    assert.equal((await fetch(`${base}/trivia-tower-extra-puzzles.js`)).status, 404);
+    for (const file of ['trivia-tower-puzzles.js', 'trivia-tower-extra-puzzles.js', 'trivia-tower-content.js']) {
+      assert.equal((await fetch(`${base}/${file}`)).status, 404, 'The answer bank stays server-side');
+    }
     await request(base, '/api/tower/state?userId=missing', undefined, 404);
     const alice = await request(base, '/api/register', { displayName: 'Alice' });
     const bob = await request(base, '/api/register', { displayName: 'Bob' });
     assert.equal(alice.menu.games.find(game => game.id === 'tower').completed, 0);
-    const initial = await request(base, `/api/tower/state?userId=${alice.userId}`);
-    const second = await request(base, `/api/tower/state?userId=${bob.userId}`);
-    assert.equal(initial.result, null);
-    assert.equal(initial.finished, false);
-    assert.equal(initial.difficulty, 'medium');
-    assert.equal(initial.maxScore, 800, 'Existing Medium days use the requested maximum');
-    assert.equal(initial.difficulties.length, 3);
+    const initial = await state(alice.userId);
+    assert.equal(initial.difficulty, 'easy'); assert.equal(initial.finished, false);
+    assert.equal(initial.result, null); assert.equal(initial.totalScore, 0);
+    assert.equal(initial.dailyMaxScore, 2600); assert.equal(initial.completedLevels, 0);
+    assert.deepEqual(initial.difficulties.map(level => level.locked), [false, true, true]);
+    assert.deepEqual(initial.puzzle, (await state(bob.userId)).puzzle);
+    for (const difficulty of ['medium', 'hard']) {
+      const gated = await state(alice.userId, difficulty);
+      assert.equal(gated.difficulty, 'easy', 'Locked puzzle requests resume the unfinished level');
+      assert.deepEqual(gated.puzzle, initial.puzzle, 'Locked requests cannot expose the next question');
+      const blocked = await request(base, '/api/tower/submit', body(alice.userId, difficulty), 403);
+      assert.match(blocked.error, /Finish Easy/);
+    }
     for (const invalid of ['impossible', '__proto__', 'constructor']) {
       await request(base, `/api/tower/state?userId=${alice.userId}&difficulty=${invalid}`, undefined, 400);
       await request(base, `/api/tower/leaderboard?difficulty=${invalid}`, undefined, 400);
       await request(base, '/api/tower/submit', { userId: alice.userId, difficulty: invalid }, 400);
     }
-    assert.deepEqual(initial.puzzle, second.puzzle, 'The daily question and item colors must be identical for all players');
-    const submission = { userId: alice.userId, date, puzzleId: shapes.id, order: partial, score: 999999 };
-    await request(base, '/api/tower/submit', { ...submission, date: '2000-01-01' }, 409);
-    await request(base, '/api/tower/submit', { ...submission, puzzleId: 'old-question' }, 409);
-    for (const order of [null, [], perfect.slice(1), [...perfect, 'extra'], Array(6).fill(perfect[0]), [...perfect.slice(0, 5), 'unknown']]) {
-      await request(base, '/api/tower/submit', { ...submission, order }, 400);
+    const easySubmission = body(alice.userId, 'easy', easyPartial);
+    await request(base, '/api/tower/submit', { ...easySubmission, date: '2000-01-01' }, 409);
+    await request(base, '/api/tower/submit', { ...easySubmission, puzzleId: 'old-question' }, 409);
+    for (const order of [null, [], easyPartial.slice(1), [...easyPartial, 'extra'], Array(6).fill(easyPartial[0]), [...easyPartial.slice(0, 5), 'unknown']]) {
+      await request(base, '/api/tower/submit', { ...easySubmission, order }, 400);
     }
-    assert.equal((await request(base, `/api/tower/state?userId=${alice.userId}`)).finished, false, 'Invalid submissions must not use the daily attempt');
+    assert.equal((await state(alice.userId)).completedLevels, 0, 'Invalid attempts cannot unlock a level');
+    const events = await fetch(`${base}/api/events`); let reader = events.body.getReader(); await reader.read();
+    const easyResult = await request(base, '/api/tower/submit', easySubmission);
+    assert.equal(easyResult.result.score, 400); assert.equal(easyResult.totalScore, 400);
+    assert.equal(easyResult.completedLevels, 1); assert.equal(easyResult.nextDifficulty, 'medium');
+    assert.deepEqual(easyResult.difficulties.map(level => level.locked), [false, false, true]);
+    let live = new TextDecoder().decode((await reader.read()).value); await reader.cancel();
+    assert.match(live, /"game":"tower"/); assert.match(live, /"score":400/);
+    assert.equal((await state(alice.userId)).difficulty, 'medium', 'Refresh resumes the next unfinished level');
+    await request(base, '/api/tower/submit', body(alice.userId, 'hard'), 403);
+    const zero = await request(base, '/api/tower/submit', body(bob.userId, 'easy', [...tower.correctOrder(easyPuzzle)].reverse()));
+    assert.equal(zero.result.score, 0); assert.equal(zero.nextDifficulty, 'medium', 'Finishing, not a perfect score, unlocks the next level');
+    assert.ok(zero.leaderboard.some(row => row.userId === bob.userId && row.score === 0));
 
-    const eventResponse = await fetch(`${base}/api/events`); const reader = eventResponse.body.getReader(); await reader.read();
-    const result = await request(base, '/api/tower/submit', submission);
-    assert.equal(result.finished, true); assert.equal(result.result.score, 533, 'The server computes a rounded score, ignoring client points');
-    assert.equal(result.result.correctPlacements, 4);
-    assert.deepEqual(result.result.correctOrder, perfect);
-    assert.ok(result.result.facts.every(fact => fact.valueLabel)); assert.ok(result.result.sources.length);
-    const live = new TextDecoder().decode((await reader.read()).value);
-    assert.match(live, /"game":"tower"/); assert.match(live, /"score":533/); await reader.cancel();
+    const submission = body(alice.userId, 'medium', mediumPartial);
+    const mediumResult = await request(base, '/api/tower/submit', submission);
+    assert.equal(mediumResult.result.score, 533); assert.equal(mediumResult.totalScore, 933);
+    assert.equal(mediumResult.nextDifficulty, 'hard'); assert.equal(mediumResult.maxScore, 800);
+    assert.deepEqual(mediumResult.result.correctOrder, mediumPerfect);
+    assert.ok(mediumResult.result.facts.every(fact => fact.valueLabel)); assert.ok(mediumResult.result.sources.length);
+    const bobMedium = await request(base, '/api/tower/submit', body(bob.userId, 'medium', mediumPartial));
+    assert.equal(bobMedium.totalScore, 533);
+    assert.equal(bobMedium.leaderboard.find(row => row.userId === alice.userId).score, 933, 'The leaderboard sums all completed levels');
+    const hardEvents = await fetch(`${base}/api/events`); reader = hardEvents.body.getReader(); await reader.read();
+    const hardResult = await request(base, '/api/tower/submit', body(alice.userId, 'hard'));
+    assert.equal(hardResult.totalScore, 2133); assert.equal(hardResult.result.score, 1200);
+    assert.equal(hardResult.nextDifficulty, null); assert.equal(hardResult.completedLevels, 3);
+    const aliceRow = hardResult.leaderboard.find(row => row.userId === alice.userId);
+    assert.equal(aliceRow.score, 2133); assert.equal(aliceRow.completedLevels, 3); assert.equal(aliceRow.correctPlacements, 14);
+    live = new TextDecoder().decode((await reader.read()).value); await reader.cancel();
+    assert.match(live, /"score":2133/, 'Hard completion broadcasts the combined score');
+    const duplicate = await request(base, '/api/tower/submit', body(alice.userId, 'medium'));
+    assert.equal(duplicate.result.score, 533); assert.equal(duplicate.totalScore, 2133, 'Retries cannot double-count or improve a locked level');
+    assert.equal((await state(alice.userId, 'easy')).totalScore, 2133, 'Revisiting a completed level preserves the daily total');
+    const menu = (await request(base, `/api/menu?userId=${alice.userId}`)).games.find(game => game.id === 'tower');
+    assert.equal(menu.completed, 3); assert.equal(menu.score, 2133); assert.equal(menu.finished, true);
+    assert.equal((await request(base, `/api/state?game=rebus&userId=${alice.userId}`)).totalScore, 0);
+    const leaderboard = await request(base, '/api/tower/leaderboard');
+    assert.deepEqual(leaderboard.leaderboard, hardResult.leaderboard);
+    assert.deepEqual((await request(base, '/api/tower/leaderboard?difficulty=easy')).leaderboard, leaderboard.leaderboard);
 
-    const duplicate = await request(base, '/api/tower/submit', { ...submission, order: perfect });
-    assert.equal(duplicate.result.score, 533, 'A locked result cannot be replaced by a better submission');
-    const bobResult = await request(base, '/api/tower/submit', { ...submission, userId: bob.userId });
-    assert.deepEqual(bobResult.leaderboard.map(row => row.rank), [1, 1], 'Equal tower scores share a rank');
-    const menu = await request(base, `/api/menu?userId=${alice.userId}`);
-    assert.equal(menu.games.find(game => game.id === 'tower').score, 533);
-    const rebus = await request(base, `/api/state?game=rebus&userId=${alice.userId}`);
-    assert.equal(rebus.totalScore, 0, 'Tower scores must not change Rebus progress');
+    for (const name of ['Perfect player', 'Tied player']) {
+      const fresh = await request(base, '/api/register', { displayName: name });
+      for (const [index, difficulty] of ['easy', 'medium', 'hard'].entries()) {
+        const scored = await request(base, '/api/tower/submit', body(fresh.userId, difficulty));
+        assert.equal(scored.totalScore, [600, 1400, 2600][index]);
+      }
+    }
+    const tied = await request(base, '/api/tower/leaderboard');
+    assert.deepEqual(tied.leaderboard.map(row => row.rank), [1, 1, 3, 4]);
+    assert.equal(new Set(tied.leaderboard.map(row => row.userId)).size, 4, 'Each player has one combined leaderboard row');
 
     await stop(running.child);
     const oldScoring = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
@@ -200,67 +247,44 @@ async function main() {
     oldScoring.towerDays['1999-01-01'] = JSON.parse(JSON.stringify(oldDay));
     fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify(oldScoring));
     running = await launch(dataDir, port); base = running.base;
-    const restored = await request(base, `/api/tower/state?userId=${alice.userId}`);
-    assert.equal(restored.result.score, 533); assert.equal(restored.puzzle.id, shapes.id);
-    assert.equal(restored.maxScore, 800);
-    assert.ok(restored.leaderboard.every(row => row.score === 533), 'Existing daily leaderboard scores migrate along with results');
-    assert.deepEqual(restored.result.submittedOrder, partial, 'The exact locked tower must survive a restart');
-    const fresh = await request(base, '/api/register', { displayName: 'Perfect player' });
-    const best = await request(base, '/api/tower/submit', { ...submission, userId: fresh.userId, order: perfect });
-    assert.equal(best.result.score, 800);
-    assert.deepEqual(best.leaderboard.map(row => row.rank), [1, 2, 2]);
-
-    for (const difficulty of ['easy', 'hard']) {
-      const level = await request(base, `/api/tower/state?userId=${alice.userId}&difficulty=${difficulty}`);
-      const shared = await request(base, `/api/tower/state?userId=${bob.userId}&difficulty=${difficulty}`);
-      assert.deepEqual(level.puzzle, shared.puzzle);
-      assert.equal(level.finished, false, 'Each difficulty has its own daily attempt');
-      const puzzle = tower.puzzles.find(question => question.id === level.puzzle.id);
-      assert.equal(puzzle.difficulty, difficulty);
-      assert.equal(level.maxScore, tower.DIFFICULTIES[difficulty].maxScore);
-      const body = { userId: alice.userId, date, difficulty, puzzleId: puzzle.id, order: tower.correctOrder(puzzle), pointsPerPlacement: 99999, maxScore: 99999 };
-      await request(base, '/api/tower/submit', { ...body, puzzleId: shapes.id }, 409);
-      const scored = await request(base, '/api/tower/submit', body);
-      const max = difficulty === 'easy' ? 600 : 1200;
-      assert.equal(scored.result.score, max, 'Difficulty points are chosen by the server');
-      assert.equal(scored.maxScore, max);
-      assert.equal(scored.leaderboard.length, 1, 'Leaderboards are separate for each level');
-      assert.equal((await request(base, '/api/tower/submit', { ...body, order: [...body.order].reverse() })).result.score, max);
-    }
-    const completedMenu = (await request(base, `/api/menu?userId=${alice.userId}`)).games.find(game => game.id === 'tower');
-    assert.equal(completedMenu.completed, 3); assert.equal(completedMenu.total, 3);
-    assert.equal(completedMenu.finished, true); assert.equal(completedMenu.score, 2333);
-    assert.equal((await request(base, `/api/tower/state?userId=${alice.userId}`)).result.score, 533, 'Other levels cannot overwrite a saved result');
-    await stop(running.child); running = await launch(dataDir, port); base = running.base;
-    assert.equal((await request(base, `/api/tower/state?userId=${alice.userId}&difficulty=hard`)).result.score, 1200);
+    const restored = await state(alice.userId, 'medium');
+    assert.equal(restored.result.score, 533); assert.equal(restored.totalScore, 2133);
+    assert.deepEqual(restored.result.submittedOrder, mediumPartial);
+    assert.equal(restored.leaderboard.find(row => row.userId === alice.userId).score, 2133);
+    assert.equal((await state(bob.userId)).difficulty, 'hard', 'Unlocks survive server restarts');
 
     await stop(running.child);
     let saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
-    saved.towerDays['2000-01-01'] = saved.towerDays[date];
-    delete saved.towerDays[date];
+    saved.towerDays['2000-01-01'] = saved.towerDays[date]; delete saved.towerDays[date];
     fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify(saved));
     running = await launch(dataDir, port); base = running.base;
-    const newMedium = await request(base, `/api/tower/state?userId=${alice.userId}&difficulty=medium`);
-    assert.equal(newMedium.maxScore, 800);
-    const mediumPuzzle = tower.puzzles.find(puzzle => puzzle.id === newMedium.puzzle.id);
-    const mediumResult = await request(base, '/api/tower/submit', {
-      userId: alice.userId, date, difficulty: 'medium', puzzleId: mediumPuzzle.id, order: tower.correctOrder(mediumPuzzle)
-    });
-    assert.equal(mediumResult.result.score, 800, 'A perfect Medium tower is worth exactly 800');
+    const newMedium = await state(alice.userId);
+    assert.equal(newMedium.difficulty, 'medium'); assert.equal(newMedium.maxScore, 800);
+    const puzzle = tower.puzzles.find(puzzle => puzzle.id === newMedium.puzzle.id);
+    const newResult = await request(base, '/api/tower/submit', { userId: alice.userId, date, difficulty: 'medium', puzzleId: puzzle.id, order: tower.correctOrder(puzzle) });
+    assert.equal(newResult.totalScore, 2400); assert.equal(newResult.result.score, 800);
     await stop(running.child);
     saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
     assert.equal(saved.towerDays['2000-01-01'].players[alice.userId].score, 533);
-    assert.equal(saved.towerDays['1999-01-01'].players[alice.userId].score, 600, 'Earlier dates keep their historical scores');
+    assert.equal(saved.towerDays['1999-01-01'].players[alice.userId].score, 600);
     saved.towerDays = {};
-    for (const [index, puzzle] of tower.puzzles.entries()) {
-      saved.towerDays[`used-${index}`] = { puzzleId: puzzle.id, order: puzzle.items.map(item => item.id), players: {} };
+    for (const [index, puzzle] of tower.puzzles.filter(puzzle => puzzle.difficulty === 'easy').entries()) {
+      saved.towerDays[`used-easy-${index}`] = published(puzzle);
     }
     fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify(saved));
-    running = await launch(dataDir, port);
-    const exhausted = await request(running.base, `/api/tower/state?userId=${alice.userId}`);
+    running = await launch(dataDir, port); base = running.base;
+    const noEasy = await state(alice.userId);
+    assert.equal(noEasy.difficulties[0].exhausted, true); assert.equal(noEasy.difficulty, 'medium');
+    assert.equal(noEasy.difficulties[2].locked, true, 'Unavailable levels are skipped without skipping an available level');
+    await stop(running.child);
+    saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8')); saved.towerDays = {};
+    for (const [index, puzzle] of tower.puzzles.entries()) saved.towerDays[`used-${index}`] = published(puzzle);
+    fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify(saved));
+    running = await launch(dataDir, port); base = running.base;
+    const exhausted = await state(alice.userId);
     assert.equal(exhausted.exhausted, true); assert.equal(exhausted.puzzle, null);
-    assert.equal(exhausted.result, null); assert.equal(exhausted.leaderboard.length, 0);
-    console.log('Passed: 300 reviewed questions, subject-specific directions, meaningful difficulty levels, 600/800/1200 scoring, rounded reveal totals, daily score migration, no repeats, private answers, immutable attempts, tied ranks, live updates, and restart persistence.');
+    assert.equal(exhausted.totalScore, 0); assert.equal(exhausted.result, null); assert.equal(exhausted.leaderboard.length, 0);
+    console.log('Passed: 300 reviewed questions, no repeats, Easy → Medium → Hard enforced by the server, zero-score unlocks, locked-question privacy, combined 2600-point daily scores and standings, immutable attempts, tied ranks, live totals, migration, exhaustion, and restart persistence.');
   } finally {
     if (running) await stop(running.child);
     const resolved = fs.realpathSync(dataDir);

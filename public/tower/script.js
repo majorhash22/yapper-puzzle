@@ -30,21 +30,39 @@ function draftKey() { return `triviaTower:${userId}:${state.date}:${state.puzzle
 function renderDifficulties() {
   $('difficultyPicker').classList.remove('hidden');
   $('difficultyMessage').classList.remove('hidden');
-  $('difficultyMessage').textContent = 'A different question at each level. One attempt per level, every day.';
+  $('difficultyMessage').textContent = 'Finish Easy to unlock Medium, then finish Medium to unlock Hard. All points add to your daily total.';
   $('difficultyPicker').replaceChildren(...state.difficulties.map(level => {
     const button = document.createElement('button'); button.type = 'button';
     button.className = 'difficulty-option'; button.setAttribute('aria-pressed', String(level.id === difficulty));
-    button.disabled = busy || loading || revealing;
+    button.disabled = busy || loading || revealing || level.locked || (level.exhausted && !level.finished);
+    if (level.locked) button.title = `Finish ${level.unlockAfter} first`;
     const label = document.createElement('strong'); label.textContent = `${level.label}${level.finished ? ' ✓' : ''}`;
-    const detail = document.createElement('span'); detail.textContent = level.exhausted ? 'All explored' : `${level.maxScore} points`;
+    const detail = document.createElement('span');
+    detail.textContent = level.locked ? `Finish ${level.unlockAfter} first` : level.exhausted ? 'All explored'
+      : level.finished && !(revealing && level.id === difficulty) ? `${level.score} / ${level.maxScore} points` : `${level.maxScore} points`;
     button.append(label, detail);
     button.addEventListener('click', async () => {
-      if (busy || loading || revealing || difficulty === level.id) return;
+      if (busy || loading || revealing || level.locked || level.exhausted || difficulty === level.id) return;
       await load(level.id);
     });
     $(`rules${level.label}Points`).textContent = `${level.maxScore.toLocaleString()} points max`;
     return button;
   }));
+  renderDailyProgress();
+}
+
+function renderDailyProgress() {
+  $('dailyProgress').classList.remove('hidden');
+  const checkedScore = state.finished && state.result ? state.result.placements
+    .filter(placement => placement.position <= revealedCount).reduce((sum, placement) => sum + placement.points, 0) : 0;
+  const total = revealing ? state.totalScore - state.result.score + checkedScore : state.totalScore;
+  $('dailyScore').textContent = total.toLocaleString();
+  $('dailyScoreLimit').textContent = `/ ${state.dailyMaxScore.toLocaleString()} points`;
+  $('dailyLevelProgress').textContent = `${state.completedLevels}/3 levels finished`;
+  const next = state.difficulties.find(level => level.id === state.nextDifficulty);
+  $('nextLevelButton').classList.toggle('hidden', !state.finished || revealing || !next);
+  $('nextLevelButton').disabled = busy || loading || revealing;
+  if (next) $('nextLevelButton').textContent = `Continue to ${next.label}`;
 }
 
 function animateTowerReveal(previousRect) {
@@ -89,7 +107,8 @@ function renderLeaderboard(rows) {
     const entry = document.createElement('div'); entry.className = `leader-row${row.userId === userId ? ' you' : ''}`;
     const rank = document.createElement('div'); rank.className = 'rank'; rank.textContent = `#${row.rank}`;
     const name = document.createElement('div'); name.className = 'leader-name'; name.textContent = row.displayName;
-    const detail = document.createElement('span'); detail.className = 'leader-sub'; detail.textContent = `${row.correctPlacements}/6 placements correct`; name.append(detail);
+    const detail = document.createElement('span'); detail.className = 'leader-sub';
+    detail.textContent = `${row.completedLevels}/3 levels · ${row.correctPlacements}/${row.completedLevels * 6} correct`; name.append(detail);
     const score = document.createElement('div'); score.className = 'leader-score'; score.textContent = row.score;
     entry.append(rank, name, score); root.append(entry);
   }
@@ -185,19 +204,22 @@ function updateRevealProgress() {
   const checked = state.result.placements.filter(placement => placement.position <= revealedCount);
   const correct = checked.filter(placement => placement.correct).length;
   $('towerScore').textContent = checked.reduce((score, placement) => score + placement.points, 0);
-  $('scoreLabel').textContent = revealing ? 'SCORE SO FAR' : 'YOUR DAILY SCORE';
+  $('scoreLabel').textContent = revealing ? 'LEVEL SCORE SO FAR' : 'THIS LEVEL’S SCORE';
   $('scoreDetail').textContent = revealing ? `${revealedCount}/6 placements checked` : `${correct}/6 correct placements`;
   $('answerSubtitle').textContent = revealing ? `Revealing from the bottom · ${revealedCount}/6` : 'The complete ranking';
   $('towerHeading').textContent = revealing ? 'Let’s see how you stacked up.' : 'That’s today’s tower.';
   $('skipRevealButton').classList.toggle('hidden', !revealing);
   $('resultDetails').classList.toggle('hidden', revealing);
   $('towerLeaderboardCard').classList.toggle('hidden', revealing);
+  renderDailyProgress();
 }
 
 function renderResultDetails() {
   $('resultTitle').textContent = state.result.correctPlacements === 6 ? 'A perfect tower. Nicely built.' : `${state.result.correctPlacements} of 6 in the right place.`;
-  $('resultCopy').textContent = 'Every exact placement earns points, even if a lower row is wrong. Compare your tower with the answers above.';
-  $('resetCopy').textContent = `Come back after midnight (${state.timeZone}) for a different question.`;
+  $('resultCopy').textContent = `This level: ${state.result.score.toLocaleString()} points. Today’s total: ${state.totalScore.toLocaleString()} points.`;
+  const next = state.difficulties.find(level => level.id === state.nextDifficulty);
+  $('resetCopy').textContent = next ? `${next.label} is unlocked. Continue when you’re ready.`
+    : `Today’s available levels are finished. Come back after midnight (${state.timeZone}) for new questions.`;
   const heading = document.createElement('strong'); heading.textContent = 'CHECK THE FACTS';
   $('factSources').replaceChildren(heading);
   for (const source of state.result.sources) {
@@ -267,7 +289,7 @@ function render(nextState, { animateReveal = false } = {}) {
   $('towerLeaderboardCard').classList.remove('hidden');
   $('skipRevealButton').classList.add('hidden');
   $('towerScore').textContent = state.finished ? state.result.score : state.maxScore;
-  $('scoreLabel').textContent = state.finished ? 'YOUR DAILY SCORE' : 'UP FOR GRABS';
+  $('scoreLabel').textContent = state.finished ? 'THIS LEVEL’S SCORE' : 'UP FOR GRABS';
   $('scoreDetail').textContent = state.finished ? `${state.result.correctPlacements}/6 correct placements` : `6 correct spots = ${state.maxScore.toLocaleString()} points`;
   $('answerSubtitle').textContent = state.finished ? 'The complete ranking' : 'Revealed when you lock in';
   $('towerFeedback').textContent = '';
@@ -285,9 +307,10 @@ function render(nextState, { animateReveal = false } = {}) {
   }
 }
 
-async function load(nextDifficulty = difficulty) {
-  // Click listeners pass an Event; only an explicit level changes the request.
-  if (typeof nextDifficulty !== 'string') nextDifficulty = difficulty;
+async function load(nextDifficulty) {
+  // Opening or refreshing resumes the next unfinished level. Explicit buttons
+  // can also revisit completed levels without changing the daily total.
+  if (typeof nextDifficulty !== 'string') nextDifficulty = undefined;
   const sequence = ++loadSequence;
   $('retryButton').classList.add('hidden');
   if (!userId) { $('joinCard').classList.remove('hidden'); $('pageMessage').textContent = ''; return; }
@@ -295,7 +318,8 @@ async function load(nextDifficulty = difficulty) {
   $('lockButton').disabled = true;
   if (state) renderDifficulties();
   try {
-    const next = await api(`/api/tower/state?userId=${encodeURIComponent(userId)}&difficulty=${encodeURIComponent(nextDifficulty)}`);
+    const levelQuery = nextDifficulty ? `&difficulty=${encodeURIComponent(nextDifficulty)}` : '';
+    const next = await api(`/api/tower/state?userId=${encodeURIComponent(userId)}${levelQuery}`);
     if (sequence === loadSequence) render(next);
   }
   catch (error) {
@@ -353,13 +377,21 @@ $('skipRevealButton').addEventListener('click', () => {
   finishReveal();
   $('towerFeedback').textContent = 'All six placements checked.';
 });
+$('nextLevelButton').addEventListener('click', async () => {
+  if (busy || loading || revealing || !state?.finished || !state.nextDifficulty) return;
+  await load(state.nextDifficulty);
+});
 const events = new EventSource('/api/events');
 events.addEventListener('leaderboard', event => {
   try {
     const payload = JSON.parse(event.data);
-    if (state && payload.game === 'tower' && payload.date === state.date && (payload.difficulty || 'medium') === difficulty) {
+    if (state && payload.game === 'tower' && payload.date === state.date) {
       state.leaderboard = payload.leaderboard;
-      if (!revealing && !busy) renderLeaderboard(payload.leaderboard);
+      if (!revealing && !busy) {
+        renderLeaderboard(payload.leaderboard);
+        const mine = payload.leaderboard.find(row => row.userId === userId);
+        if (mine) { state.totalScore = mine.score; state.completedLevels = mine.completedLevels; renderDailyProgress(); }
+      }
     }
   } catch {}
 });

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#181425" />
   <title>Trivia Tower · Yappers Puzzle</title>
   <link rel="stylesheet" href="/styles.css?v=9" />
-  <link rel="stylesheet" href="/tower/styles.css?v=4" />
+  <link rel="stylesheet" href="/tower/styles.css?v=5" />
 </head>
 <body class="tower-page">
   <main class="tower-shell">
@@ -31,6 +31,10 @@
     <button id="retryButton" class="secondary hidden" type="button">Try again</button>
     <nav id="difficultyPicker" class="difficulty-picker hidden" aria-label="Daily tower difficulty"></nav>
     <p id="difficultyMessage" class="difficulty-message hidden" role="status"></p>
+    <div id="dailyProgress" class="daily-progress hidden" aria-label="Your combined daily score">
+      <div><span>TODAY’S TOTAL</span><strong id="dailyScore">0</strong><span id="dailyScoreLimit">/ 2,600 points</span></div>
+      <p id="dailyLevelProgress">0/3 levels finished</p>
+    </div>
 
     <section id="towerGame" class="hidden" aria-labelledby="towerHeading">
       <h1 id="towerHeading" class="sr-only">Today’s Trivia Tower</h1>
@@ -66,18 +70,18 @@
       </div>
 
       <section id="resultDetails" class="result-details hidden" aria-labelledby="resultTitle">
-        <div><div class="eyebrow">TODAY’S CLIMB</div><h2 id="resultTitle"></h2><p id="resultCopy"></p><p id="resetCopy" class="muted-copy"></p></div>
+        <div><div class="eyebrow">TODAY’S CLIMB</div><h2 id="resultTitle"></h2><p id="resultCopy"></p><p id="resetCopy" class="muted-copy"></p><button id="nextLevelButton" class="lock-button hidden" type="button">Continue to Medium</button></div>
         <div id="factSources" class="fact-sources"></div>
       </section>
       <section id="towerLeaderboardCard" class="tower-leaderboard card" aria-labelledby="towerLeaderboardHeading">
-        <div class="leaderboard-head"><div><div class="eyebrow">LIVE · TODAY</div><h2 id="towerLeaderboardHeading">The daily climbers</h2></div><span class="live-dot" title="Live updates"></span></div>
+        <div class="leaderboard-head"><div><div class="eyebrow">LIVE · TODAY · ALL LEVELS</div><h2 id="towerLeaderboardHeading">The daily climbers</h2></div><span class="live-dot" title="Live updates"></span></div>
         <div id="towerLeaderboard" class="leaderboard"></div>
       </section>
     </section>
 
     <section id="exhaustedCard" class="card exhausted-card hidden">
       <div class="eyebrow">EVERY TOWER IS A FIRST</div><h1>You’ve reached the summit.</h1>
-      <p>Every available question at this level has appeared. Try another difficulty, or come back when more questions are added.</p>
+      <p>Every available question at this level has appeared. Available levels still unlock in order. Come back when more questions are added.</p>
       <a class="back-link" href="/">Explore the other daily games →</a>
     </section>
     <footer class="tower-footer">A little knowledge. A little instinct. A new climb every day.</footer>
@@ -85,11 +89,11 @@
   <dialog id="rulesDialog" class="rules-dialog" aria-labelledby="rulesTitle">
     <div class="eyebrow">WELCOME TO TRIVIA TOWER</div>
     <h2 id="rulesTitle">Six things. One correct order.</h2>
-    <p>Use your knowledge and a little instinct to build the daily tower.</p>
+    <p>Finish Easy, then Medium, then Hard. Your points from all three levels add up to one daily score.</p>
     <ol class="rules-steps">
       <li><strong>Read the question.</strong> Put the smallest, earliest, or lowest item at the bottom (1), and the largest, latest, or highest at the top (6).</li>
       <li><strong>Build your tower.</strong> Drag the rows, tap their arrow buttons, or focus a row and use your keyboard arrows.</li>
-      <li><strong>Lock it in.</strong> You get one submission per difficulty each day. Your tower moves left and the answers appear on the right, one row at a time.</li>
+      <li><strong>Lock it in.</strong> You get one submission per level each day. Your tower moves left and the answers appear on the right. Finish the reveal to continue to the next level; you do not need a perfect score.</li>
       <li><strong>Score every correct spot.</strong> Each exact placement earns one sixth of the total, even if another row is wrong. Scores round to whole points. Time never affects your score.</li>
     </ol>
     <div class="rules-scoring" aria-label="Points by difficulty">
@@ -97,9 +101,9 @@
       <div><strong>Medium</strong><span id="rulesMediumPoints">800 points max</span></div>
       <div><strong>Hard</strong><span id="rulesHardPoints">1,200 points max</span></div>
     </div>
-    <p class="rules-reset">Three fresh challenges daily. Questions never repeat.</p>
+    <p class="rules-reset">Up to 2,600 points each day. The leaderboard combines all three levels.</p>
     <form method="dialog"><button class="lock-button" autofocus>Let’s build a tower</button></form>
   </dialog>
-  <script src="/tower/script.js?v=4"></script>
+  <script src="/tower/script.js?v=5"></script>
 </body>
 </html>
