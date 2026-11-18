@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#181425" />
   <title>Trivia Tower · Yappers Puzzle</title>
   <link rel="stylesheet" href="/styles.css?v=9" />
-  <link rel="stylesheet" href="/tower/styles.css?v=3" />
+  <link rel="stylesheet" href="/tower/styles.css?v=4" />
 </head>
 <body class="tower-page">
   <main class="tower-shell">
@@ -33,11 +33,7 @@
     <p id="difficultyMessage" class="difficulty-message hidden" role="status"></p>
 
     <section id="towerGame" class="hidden" aria-labelledby="towerHeading">
-      <div class="tower-intro">
-        <div class="eyebrow">THE DAILY RANKING CHALLENGE</div>
-        <h1 id="towerHeading">Build your way to the top.</h1>
-        <p>Start small at the bottom. Go big at the top.</p>
-      </div>
+      <h1 id="towerHeading" class="sr-only">Today’s Trivia Tower</h1>
 
       <div id="towerStage" class="tower-stage">
         <section class="tower-frame player-frame" aria-labelledby="yourTowerHeading">
@@ -47,16 +43,13 @@
           <div class="tower-edge bottom-edge"><span>BOTTOM · 1</span><strong id="yourLowLabel"></strong></div>
         </section>
 
-        <section class="tower-center" aria-labelledby="questionTitle">
+        <section class="tower-center" aria-labelledby="questionInstructions">
           <div class="question-card">
-            <span id="questionCategory" class="tower-category"></span>
-            <div class="rainbow-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-            <h2 id="questionTitle"></h2>
-            <p id="questionInstructions"></p>
+            <h2 id="questionInstructions"></h2>
             <p id="questionNote" class="question-note"></p>
           </div>
           <div id="buildGuide" class="build-guide"><span aria-hidden="true">↑</span><p>Build from<br /><strong>bottom to top</strong></p></div>
-          <div class="tower-score"><span id="scoreLabel">UP FOR GRABS</span><strong id="towerScore">600</strong><span id="scoreDetail">100 points per correct placement</span></div>
+          <div class="tower-score"><span id="scoreLabel">UP FOR GRABS</span><strong id="towerScore">600</strong><span id="scoreDetail">6 correct spots = 600 points</span></div>
           <button id="lockButton" class="lock-button" type="button">Lock in my tower <span aria-hidden="true">↗</span></button>
           <p id="moveHelp" class="move-help">Drag the rows or use ↑ ↓ to move them. Take your time. You get one submission.</p>
           <p id="towerFeedback" class="tower-feedback" role="status" aria-atomic="true"></p>
@@ -97,16 +90,16 @@
       <li><strong>Read the question.</strong> Put the smallest, earliest, or lowest item at the bottom (1), and the largest, latest, or highest at the top (6).</li>
       <li><strong>Build your tower.</strong> Drag the rows, tap their arrow buttons, or focus a row and use your keyboard arrows.</li>
       <li><strong>Lock it in.</strong> You get one submission per difficulty each day. Your tower moves left and the answers appear on the right, one row at a time.</li>
-      <li><strong>Score every correct spot.</strong> Each exact placement counts, even if another row is wrong. Time never affects your score.</li>
+      <li><strong>Score every correct spot.</strong> Each exact placement earns one sixth of the total, even if another row is wrong. Scores round to whole points. Time never affects your score.</li>
     </ol>
     <div class="rules-scoring" aria-label="Points by difficulty">
-      <div><strong>Easy</strong><span id="rulesEasyPoints">100 points / spot</span></div>
-      <div><strong>Medium</strong><span id="rulesMediumPoints">150 points / spot</span></div>
-      <div><strong>Hard</strong><span id="rulesHardPoints">200 points / spot</span></div>
+      <div><strong>Easy</strong><span id="rulesEasyPoints">600 points max</span></div>
+      <div><strong>Medium</strong><span id="rulesMediumPoints">800 points max</span></div>
+      <div><strong>Hard</strong><span id="rulesHardPoints">1,200 points max</span></div>
     </div>
     <p class="rules-reset">Three fresh challenges daily. Questions never repeat.</p>
     <form method="dialog"><button class="lock-button" autofocus>Let’s build a tower</button></form>
   </dialog>
-  <script src="/tower/script.js?v=3"></script>
+  <script src="/tower/script.js?v=4"></script>
 </body>
 </html>

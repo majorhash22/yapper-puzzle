@@ -42,7 +42,7 @@ function renderDifficulties() {
       if (busy || loading || revealing || difficulty === level.id) return;
       await load(level.id);
     });
-    $(`rules${level.label}Points`).textContent = `${level.pointsPerPlacement} points / spot`;
+    $(`rules${level.label}Points`).textContent = `${level.maxScore.toLocaleString()} points max`;
     return button;
   }));
 }
@@ -122,10 +122,10 @@ function itemRow(item, position, answer = false, animatePosition = 0) {
   } else if (state.finished) {
     const mark = document.createElement('span');
     if (position <= revealedCount) {
-      const correct = state.result.placements.find(placement => placement.position === position).correct;
+      const { correct, points } = state.result.placements.find(placement => placement.position === position);
       row.classList.add(correct ? 'placement-correct' : 'placement-incorrect');
       mark.className = `placement-mark ${correct ? 'correct' : 'missed'}`;
-      mark.textContent = correct ? `✓ +${state.pointsPerPlacement}` : '✕ Wrong';
+      mark.textContent = correct ? `✓ +${points}` : '✕ Wrong';
       mark.setAttribute('aria-label', correct ? 'Correct placement' : 'Incorrect placement');
     } else {
       mark.className = 'placement-mark pending'; mark.textContent = '…';
@@ -184,7 +184,7 @@ function renderTowers({ animatePosition = 0 } = {}) {
 function updateRevealProgress() {
   const checked = state.result.placements.filter(placement => placement.position <= revealedCount);
   const correct = checked.filter(placement => placement.correct).length;
-  $('towerScore').textContent = correct * state.pointsPerPlacement;
+  $('towerScore').textContent = checked.reduce((score, placement) => score + placement.points, 0);
   $('scoreLabel').textContent = revealing ? 'SCORE SO FAR' : 'YOUR DAILY SCORE';
   $('scoreDetail').textContent = revealing ? `${revealedCount}/6 placements checked` : `${correct}/6 correct placements`;
   $('answerSubtitle').textContent = revealing ? `Revealing from the bottom · ${revealedCount}/6` : 'The complete ranking';
@@ -219,7 +219,7 @@ function revealNextPlacement() {
   const answer = state.puzzle.items.find(item => item.id === state.result.correctOrder[revealedCount - 1]);
   const guess = state.puzzle.items.find(item => item.id === placement.id);
   $('towerFeedback').textContent = placement.correct
-    ? `Position ${revealedCount}: ${answer.label}. Correct! +${state.pointsPerPlacement} points.`
+    ? `Position ${revealedCount}: ${answer.label}. Correct! +${placement.points} points.`
     : `Position ${revealedCount}: ${answer.label}. You placed ${guess.label}. Incorrect — 0 points.`;
   if (revealedCount === state.puzzle.items.length) finishReveal({ animatePosition: revealedCount });
   else {
@@ -254,8 +254,6 @@ function render(nextState, { animateReveal = false } = {}) {
     try { const draft = JSON.parse(readStorage(draftKey())); if (validDraft(draft, state.puzzle.items)) order = draft; } catch {}
   }
   $('towerPlayerName').textContent = state.displayName;
-  $('questionTitle').textContent = state.puzzle.title;
-  $('questionCategory').textContent = state.puzzle.category;
   $('questionInstructions').textContent = state.puzzle.instructions;
   $('questionNote').textContent = state.puzzle.note;
   for (const prefix of ['your', 'answer']) {
@@ -270,7 +268,7 @@ function render(nextState, { animateReveal = false } = {}) {
   $('skipRevealButton').classList.add('hidden');
   $('towerScore').textContent = state.finished ? state.result.score : state.maxScore;
   $('scoreLabel').textContent = state.finished ? 'YOUR DAILY SCORE' : 'UP FOR GRABS';
-  $('scoreDetail').textContent = state.finished ? `${state.result.correctPlacements}/6 correct placements` : `${state.pointsPerPlacement} points per correct placement`;
+  $('scoreDetail').textContent = state.finished ? `${state.result.correctPlacements}/6 correct placements` : `6 correct spots = ${state.maxScore.toLocaleString()} points`;
   $('answerSubtitle').textContent = state.finished ? 'The complete ranking' : 'Revealed when you lock in';
   $('towerFeedback').textContent = '';
   $('refreshButton').classList.add('hidden');

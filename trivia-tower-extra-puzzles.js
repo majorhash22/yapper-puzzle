@@ -58,19 +58,17 @@ const references = {
   hardness: ['USGS · Mineral gemstones and Mohs hardness', 'https://pubs.usgs.gov/gip/gemstones/mineral.html']
 };
 const puzzles = [];
-let difficulty = 'easy';
 function add(id, title, category, source, lowLabel, highLabel, unit, rows, note = '') {
   const [sourceTitle, url] = references[source];
   puzzles.push({
-    id, title, category, difficulty, lowLabel, highLabel,
-    instructions: `Put ${lowLabel.toLowerCase()} at the bottom and ${highLabel.toLowerCase()} at the top.`,
+    id, title, category, lowLabel, highLabel,
     note, sources: [{ title: sourceTitle, url }],
     items: rows.map(([label, value, display]) => ({ label, value,
       valueLabel: display || `${value.toLocaleString('en-US', { maximumFractionDigits: 6 })}${unit ? ` ${unit}` : ''}` }))
   });
 }
 
-// EASY · 67 questions: familiar chronology, everyday quantities, and basics.
+// Expansion questions. Wording and difficulty are reviewed in trivia-tower-content.js.
 add('disney-renaissance', 'The Disney Renaissance arrives', 'Film & TV', 'disney', 'Earliest film', 'Latest film', '', [['The Little Mermaid',1989],['Beauty and the Beast',1991],['Aladdin',1992],['Pocahontas',1995],['Hercules',1997],['Mulan',1998]]);
 add('disney-modern', 'A new age of Disney', 'Film & TV', 'disney', 'Earliest film', 'Latest film', '', [['The Princess and the Frog',2009],['Tangled',2010],['Wreck-It Ralph',2012],['Big Hero 6',2014],['Zootopia',2016],['Encanto',2021]]);
 add('pixar-other-classics', 'Another ticket to Pixar', 'Film & TV', 'pixar', 'Earliest film', 'Latest film', '', [['Toy Story 2',1999],['The Incredibles',2004],['Cars',2006],['Ratatouille',2007],['WALL-E',2008],['Brave',2012]]);
@@ -140,8 +138,7 @@ add('english-number-words', 'How many letters in that number?', 'Everyday', 'mat
 
 add('chess-piece-groups', 'Count the pieces at the start', 'Games', 'chess', 'Fewest pieces', 'Most pieces', 'pieces', [['White queens',1],['White rooks',2],['White bishops and knights together',4],['White pawns',8],['All white pieces, including pawns',16],['All pieces of both colours',32]], 'Standard starting position; count pieces in the stated group.');
 
-// MEDIUM · 67 questions: less obvious comparisons and wider subject knowledge.
-difficulty = 'medium';
+// More science, geography, history, and culture.
 add('alkali-metal-protons', 'The alkali metal family', 'Science', 'chemistry', 'Fewest protons', 'Most protons', 'protons', [['Lithium',3],['Sodium',11],['Potassium',19],['Rubidium',37],['Caesium',55],['Francium',87]]);
 add('halogen-protons', 'Six halogens, one column', 'Science', 'chemistry', 'Fewest protons', 'Most protons', 'protons', [['Fluorine',9],['Chlorine',17],['Bromine',35],['Iodine',53],['Astatine',85],['Tennessine',117]]);
 add('element-place-names', 'Elements named after places', 'Science', 'chemistry', 'Lowest atomic number', 'Highest atomic number', '', [['Scandium',21],['Gallium',31],['Germanium',32],['Europium',63],['Polonium',84],['Americium',95]]);
@@ -210,8 +207,7 @@ add('scrabble-tile-quantities', 'How many tiles of that letter?', 'Games', 'scra
 add('chess-piece-mobility', 'Moves from the centre of an empty board', 'Games', 'chess', 'Fewest destination squares', 'Most destination squares', 'squares', [['White pawn on d4, no captures',1],['Rook on a1',14],['Bishop on d4',13],['Knight on d4',8],['Queen on d4',27],['King on a1',3]], 'Count legal destinations on an otherwise empty board, with no check or castling; pawn moves one step.');
 add('programming-language-debuts', 'Programming languages arrive', 'Technology', 'computing', 'Earliest first appearance', 'Latest first appearance', '', [['FORTRAN',1957],['COBOL',1959],['BASIC',1964],['C',1972],['Python',1991],['JavaScript',1995]], 'First public implementation or release, not later standards.');
 
-// HARD · 66 questions: specialist facts, close comparisons, and calculations.
-difficulty = 'hard';
+// More science, calculations, technology, and history.
 add('lanthanide-protons', 'Inside the lanthanide row', 'Science', 'chemistry', 'Lowest atomic number', 'Highest atomic number', '', [['Cerium',58],['Neodymium',60],['Gadolinium',64],['Dysprosium',66],['Erbium',68],['Lutetium',71]]);
 add('actinide-protons', 'Inside the actinide row', 'Science', 'chemistry', 'Lowest atomic number', 'Highest atomic number', '', [['Thorium',90],['Protactinium',91],['Neptunium',93],['Plutonium',94],['Americium',95],['Curium',96]]);
 add('alkaline-earth-melting', 'Melting the alkaline earths', 'Science', 'rsc', 'Lowest melting point', 'Highest melting point', '°C', [['Magnesium',650],['Radium',700],['Barium',727],['Strontium',777],['Calcium',842],['Beryllium',1287]], 'Reference melting points at standard pressure, rounded.');

@@ -290,7 +290,19 @@ function menuFor(userId) {
 function towerDay(key, difficulty = 'medium') {
   const count = Object.keys(db.towerDays).length;
   const day = tower.ensureTowerDay(db.towerDays, key, tower.puzzles, difficulty);
-  if (Object.keys(db.towerDays).length !== count) saveDb();
+  const maxScore = tower.DIFFICULTIES[difficulty].maxScore;
+  const needsScoringUpdate = day.scoringVersion !== tower.SCORING_VERSION || day.maxScore !== maxScore;
+  if (needsScoringUpdate) {
+    day.difficulty = difficulty; day.maxScore = maxScore; day.scoringVersion = tower.SCORING_VERSION;
+    delete day.pointsPerPlacement;
+    const puzzle = tower.puzzles.find(question => question.id === day.puzzleId);
+    for (const player of Object.values(day.players)) {
+      const result = tower.scoreOrder(puzzle, player.order, maxScore);
+      Object.assign(player, { maxScore, score: result.score, correctPlacements: result.correctPlacements });
+      delete player.pointsPerPlacement;
+    }
+  }
+  if (Object.keys(db.towerDays).length !== count || needsScoringUpdate) saveDb();
   return day;
 }
 
@@ -332,11 +344,9 @@ function towerState(userId, difficulty = 'medium') {
     difficulties: Object.entries(tower.DIFFICULTIES).map(([id, config]) => {
       const level = towerDay(key, id);
       return { id, label: config.label, finished: Boolean(level.players[userId]), exhausted: !level.puzzleId,
-        pointsPerPlacement: level.pointsPerPlacement || tower.POINTS_PER_PLACEMENT,
-        maxScore: (level.pointsPerPlacement || tower.POINTS_PER_PLACEMENT) * tower.ITEM_COUNT };
+        maxScore: level.maxScore };
     }),
-    pointsPerPlacement: day.pointsPerPlacement || tower.POINTS_PER_PLACEMENT,
-    maxScore: (day.pointsPerPlacement || tower.POINTS_PER_PLACEMENT) * tower.ITEM_COUNT,
+    maxScore: day.maxScore,
     puzzle: puzzle ? tower.publicTowerPuzzle(puzzle, day) : null,
     result: player ? tower.revealResult(puzzle, player) : null,
     leaderboard: towerLeaderboard(key, difficulty)
@@ -542,10 +552,9 @@ async function handleApi(req, res, url) {
     if (!tower.validOrder(puzzle, body.order)) {
       return json(res, 400, { error: 'Place all six items in the tower exactly once.' });
     }
-    const pointsPerPlacement = day.pointsPerPlacement || tower.POINTS_PER_PLACEMENT;
-    const result = tower.scoreOrder(puzzle, body.order, pointsPerPlacement);
+    const result = tower.scoreOrder(puzzle, body.order, day.maxScore);
     day.players[userId] = {
-      order: body.order, score: result.score, correctPlacements: result.correctPlacements, difficulty, pointsPerPlacement,
+      order: body.order, score: result.score, correctPlacements: result.correctPlacements, difficulty, maxScore: day.maxScore,
       finishedAt: new Date().toISOString()
     };
     saveDb();

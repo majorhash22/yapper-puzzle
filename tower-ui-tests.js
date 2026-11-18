@@ -61,9 +61,9 @@ async function page({ storage = new Map(), reducedMotion = false } = {}) {
     return {
       date: '2030-01-01', timeZone: 'America/Regina', displayName: 'UI Player', difficulty,
       difficulties: Object.entries(fixtures).map(([id, level]) => ({ id, label: level.label,
-        pointsPerPlacement: level.pointsPerPlacement, maxScore: level.pointsPerPlacement * 6,
+        maxScore: level.maxScore,
         finished: Boolean(level.player), exhausted: false })),
-      pointsPerPlacement: level.pointsPerPlacement, maxScore: level.pointsPerPlacement * 6,
+      maxScore: level.maxScore,
       finished: Boolean(level.player), exhausted: false, puzzle: tower.publicTowerPuzzle(level.puzzle, level.day),
       result: level.player ? tower.revealResult(level.puzzle, level.player) : null, leaderboard: []
     };
@@ -75,7 +75,7 @@ async function page({ storage = new Map(), reducedMotion = false } = {}) {
     if (options?.method === 'POST') {
       const body = JSON.parse(options.body);
       const level = fixtures[body.difficulty];
-      level.player ||= { order: body.order, pointsPerPlacement: level.pointsPerPlacement };
+      level.player ||= { order: body.order, maxScore: level.maxScore };
       return { ok: true, json: async () => state(body.difficulty) };
     }
     const difficulty = new URL(url, 'http://localhost').searchParams.get('difficulty');
@@ -105,6 +105,9 @@ async function main() {
   assert.equal(el.answerFrame.classList.contains('hidden'), true);
   assert.equal(el.answerTower.children.length, 0, 'The answer tower has no rows before lock-in');
   assert.equal(el.playerTower.children.length, 6);
+  assert.equal(el.questionInstructions.textContent, app.call('state.puzzle.instructions'));
+  assert.equal(el.questionTitle, undefined, 'The question card contains directions without a decorative title');
+  assert.equal(el.questionCategory, undefined);
   const firstDraft = app.call('order.join()');
   const movable = el.playerTower.children[1];
   await movable.emit('keydown', { key: 'ArrowDown' });
@@ -113,7 +116,8 @@ async function main() {
   assert.equal(el.lockButton.disabled, true, 'Lock-in is disabled while changing difficulty');
   await el.lockButton.click(); assert.equal(app.call('state.finished'), false);
   await switching; assert.equal(app.call('difficulty'), 'medium');
-  assert.equal(el.towerScore.textContent, 900);
+  assert.equal(el.towerScore.textContent, 800);
+  assert.equal(el.rulesMediumPoints.textContent, '800 points max');
   await el.difficultyPicker.children[0].click();
   assert.equal(app.call('order.join()'), movedDraft, 'Switching difficulties restores the draft');
   app.fail(true); await el.difficultyPicker.children[2].click();
@@ -142,6 +146,22 @@ async function main() {
   assert.equal(app.call('state.finished'), true); assert.equal(app.call('revealedCount'), 6);
   assert.equal(app.call('revealing'), false, 'Reopening a completed level shows its saved result immediately');
   assert.equal(app.animations.length, 2, 'Saved results do not replay the tower animation');
+
+  await el.difficultyPicker.children[1].click();
+  const expected = tower.correctOrder(app.fixtures.medium.puzzle);
+  for (const [index, id] of expected.entries()) {
+    let row = el.playerTower.children.find(row => row.dataset.itemId === id);
+    while (row.dataset.position !== index + 1) {
+      await row.children[2].children[row.dataset.position < index + 1 ? 0 : 1].click();
+      row = el.playerTower.children.find(row => row.dataset.itemId === id);
+    }
+  }
+  await el.lockButton.click();
+  app.tick(); assert.equal(el.towerScore.textContent, 133);
+  app.tick(); assert.equal(el.towerScore.textContent, 267);
+  for (let step = 0; step < 4; step++) app.tick();
+  assert.equal(el.towerScore.textContent, 800, 'The reveal, row awards, and final Medium score agree exactly');
+  assert.equal(el.scoreDetail.textContent, '6/6 correct placements');
 
   const reduced = await page({ storage: new Map([['yappersPuzzleUserId', 'ui-player']]), reducedMotion: true });
   await reduced.elements.lockButton.click(); assert.equal(reduced.animations.length, 0);
