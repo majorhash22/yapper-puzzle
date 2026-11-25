@@ -7,26 +7,38 @@ const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const tower = require('./trivia-tower');
 
-assert.equal(tower.puzzles.length, 300, 'The refreshed playable bank stays at exactly 300 questions');
+assert.equal(tower.puzzles.length, 340, 'The rebalanced bank expands to 340 active questions');
 assert.equal(require('./trivia-tower-extra-puzzles').length, 200);
 const refreshPack = require('./trivia-tower-refresh');
-assert.equal(refreshPack.puzzles.length, 175); assert.equal(tower.retiredPuzzles.length, 175);
+const approachablePack = require('./trivia-tower-approachable');
+assert.equal(approachablePack.length, 120);
+assert.equal(refreshPack.puzzles.length, 175); assert.equal(tower.retiredPuzzles.length, 255);
+const previousBank = [...require('./trivia-tower-puzzles').filter(puzzle => !refreshPack.retiredIds.includes(puzzle.id)), ...refreshPack.puzzles];
+for (const previous of previousBank) {
+  const current = tower.getPuzzle(previous.id);
+  const expectedDifficulty = previous.difficulty === 'medium' ? 'hard' : previous.difficulty;
+  assert.deepEqual({ ...current, items: current.items.map(({ id, ...item }) => item), contentKey: undefined },
+    { ...previous, difficulty: expectedDifficulty, contentKey: undefined }, `${previous.id} must preserve its wording, facts, sources, and stable identity`);
+  assert.equal(tower.puzzles.some(puzzle => puzzle.id === previous.id), previous.difficulty !== 'hard');
+}
+assert.ok(approachablePack.every(puzzle => puzzle.difficulty === 'medium' && !previousBank.some(previous => previous.id === puzzle.id)), 'Medium consists entirely of newly authored questions');
 for (const id of refreshPack.retiredIds) {
   assert.ok(!tower.puzzles.some(puzzle => puzzle.id === id), `${id} must leave the playable pool`);
   assert.equal(tower.getPuzzle(id).id, id, 'Retired questions remain readable for saved-game compatibility');
 }
 const labelSets = new Set();
 for (const puzzle of tower.puzzles) {
-  const key = puzzle.items.map(item => item.label.toLowerCase()).sort().join('|');
+  const key = tower.questionKey(puzzle);
   assert.ok(!labelSets.has(key), `${puzzle.id} must use a distinct six-item set`);
   labelSets.add(key);
 }
 const counts = Object.fromEntries(Object.keys(tower.DIFFICULTIES).map(difficulty => [difficulty, tower.puzzles.filter(puzzle => puzzle.difficulty === difficulty).length]));
+assert.deepEqual(counts, { easy: 60, medium: 120, hard: 160 });
 for (const count of Object.values(counts)) assert.ok(count >= 30, 'Every level needs a substantial question pool');
 for (const [id, difficulty] of Object.entries({
   'wildlife-size': 'easy', 'animal-legs': 'easy', 'lion-king-story': 'easy', 'frozen-story': 'easy',
-  'spicy-peppers': 'medium', 'country-area': 'medium', 'minecraft-mob-health': 'medium',
-  'moon-sizes': 'hard', 'famous-ships-lengths': 'hard', 'giant-lego-builds': 'hard'
+  'food-through-the-body': 'medium', 'disney-across-generations': 'medium', 'poker-hand-strengths': 'medium',
+  'spicy-peppers': 'hard', 'country-area': 'hard', 'minecraft-mob-health': 'hard'
 })) assert.equal(tower.puzzles.find(puzzle => puzzle.id === id).difficulty, difficulty, `${id} needs the reviewed difficulty`);
 for (const puzzle of tower.puzzles) {
   assert.match(puzzle.instructions, /^Put /);
@@ -36,7 +48,7 @@ for (const puzzle of tower.puzzles) {
 assert.equal(tower.puzzles.find(puzzle => puzzle.id === 'country-area').instructions,
   'Put the country with the smallest area at the bottom and the largest area at the top.');
 assert.ok(new Set(tower.puzzles.map(puzzle => puzzle.category)).size >= 10, 'Questions should cover varied subjects');
-const shapes = tower.puzzles.find(puzzle => puzzle.id === 'famous-ships-lengths');
+const shapes = tower.getPuzzle('famous-ships-lengths');
 const expected = ['Cutty Sark', 'Bismarck', 'RMS Titanic', 'RMS Queen Mary', 'Queen Mary 2', 'Seawise Giant'];
 const perfect = expected.map(label => shapes.items.find(item => item.label === label).id);
 assert.deepEqual(tower.correctOrder(shapes), perfect, 'The ship comparison must have an accurate bottom-to-top answer');
@@ -73,19 +85,47 @@ for (let index = 0; index < Math.max(...Object.values(counts)); index++) {
   }
   days = JSON.parse(JSON.stringify(days)); // Simulate durable saves and restarts.
 }
-assert.equal(used.size, 300);
+assert.equal(used.size, tower.puzzles.length);
 assert.equal(tower.ensureTowerDay(days, '2031-01-01').puzzleId, null, 'Exhaustion must not recycle questions');
 assert.equal(tower.ensureTowerDay(days, '2031-01-02').puzzleId, null);
 const extra = { ...shapes, id: 'new-question', difficulty: 'medium' };
 assert.equal(tower.ensureTowerDay(days, '2031-01-03', [...tower.puzzles, extra]).puzzleId, extra.id, 'New questions join without resetting history');
+assert.equal(tower.ensureTowerDay(days, '2031-01-04', [{ ...extra, id: 'renamed-question' }]).puzzleId, null,
+  'Changing a used question ID cannot make its content available again');
+const movedPuzzle = tower.getPuzzle('country-area');
+const movedDays = { '2026-11-01': { puzzleId: movedPuzzle.id, players: {} } };
+assert.equal(tower.ensureTowerDay(movedDays, '2031-02-01', [movedPuzzle], 'hard').puzzleId, null,
+  'A question shown at the old Medium level stays unavailable at Hard');
+assert.equal(movedDays['2026-11-01'].contentKey, tower.questionKey(movedPuzzle), 'Legacy reservations acquire durable content identity');
+const alias = { ...shapes, id: 'edited-directions', difficulty: 'medium', instructions: 'Different wording',
+  items: [...shapes.items].reverse().map(item => ({ ...item, label: `  ${item.label.toUpperCase().replace(/’/g, "'")}!!!  ` })) };
+assert.equal(tower.questionKey(alias), tower.questionKey(shapes), 'Content identity ignores item order, case, punctuation, and instructions');
+assert.equal(tower.questionKey({ items: [{ label: 'Pokémon' }] }), tower.questionKey({ items: [{ label: 'POKEMON' }] }));
+assert.equal(tower.questionKey({ items: [{ label: 'Spider-Man' }] }), tower.questionKey({ items: [{ label: 'Spider Man' }] }));
+assert.equal(tower.questionKey({ items: [{ label: 'O’Neal' }] }), tower.questionKey({ items: [{ label: 'ONeal' }] }));
+assert.equal(tower.ensureTowerDay({ 'old:hard': { puzzleId: shapes.id, players: {} } }, '2031-03-01', [alias]).puzzleId, null,
+  'Legacy history without content keys still blocks renamed archived content');
+const unknownHistory = JSON.parse(JSON.stringify({ 'old:medium': { puzzleId: 'no-longer-in-any-bank', contentKey: tower.questionKey(alias), players: {} } }));
+assert.equal(tower.ensureTowerDay(unknownHistory, '2031-04-01', [alias]).puzzleId, null,
+  'Persisted content identity prevents repeats even if a historical ID is absent from every bank');
 const rebalanceDays = { '2032-01-01:easy': { puzzleId: shapes.id, order: perfect, players: {} } };
 const rebalanced = tower.ensureTowerDay(rebalanceDays, '2032-01-01', tower.puzzles, 'easy');
 assert.equal(tower.puzzles.find(puzzle => puzzle.id === rebalanced.puzzleId).difficulty, 'easy');
 assert.ok(Object.values(rebalanceDays).some(day => day.puzzleId === shapes.id && day.retiredReason === 'difficulty-review'), 'A replaced unplayed question remains reserved');
 const submittedDay = { puzzleId: shapes.id, order: perfect, players: { existing: { order: partial } } };
 assert.equal(tower.ensureTowerDay({ '2032-01-01:easy': submittedDay }, '2032-01-01', tower.puzzles, 'easy'), submittedDay, 'Submitted days keep the same question for everyone');
+const obsoleteDays = { '2032-01-01:hard': { puzzleId: shapes.id, order: perfect, players: {} } };
+const updatedHard = tower.ensureTowerDay(obsoleteDays, '2032-01-01', tower.puzzles, 'hard');
+assert.equal(tower.getPuzzle(updatedHard.puzzleId).difficulty, 'hard', 'Unsubmitted retired Hard questions receive the newly calibrated difficulty');
+assert.notEqual(updatedHard.puzzleId, shapes.id);
+assert.ok(Object.values(obsoleteDays).some(day => day.puzzleId === shapes.id && day.retiredReason === 'difficulty-review'));
+const oldMediumDays = { '2032-01-01': { puzzleId: movedPuzzle.id, order: tower.correctOrder(movedPuzzle), players: {} } };
+assert.equal(tower.getPuzzle(tower.ensureTowerDay(oldMediumDays, '2032-01-01').puzzleId).difficulty, 'medium');
+assert.equal(tower.ensureTowerDay(oldMediumDays, '2032-01-01', [movedPuzzle], 'hard').puzzleId, null,
+  'Replacing an unanswered Medium question reserves it before Hard selection on the same day');
 for (const puzzle of tower.puzzles) {
   const day = tower.ensureTowerDay({}, '2030-01-01', [puzzle], puzzle.difficulty);
+  assert.equal(day.contentKey, tower.questionKey(puzzle), 'New selections persist their content identity');
   const publicPuzzle = tower.publicTowerPuzzle(puzzle, day);
   for (const item of publicPuzzle.items) {
     assert.deepEqual(Object.keys(item).sort(), ['color', 'id', 'label'], 'Public items must not leak values or ranks');
@@ -101,7 +141,7 @@ for (const puzzle of tower.puzzles) {
 const refreshDate = tower.CONTENT_REFRESH.date;
 const retiredQuestion = tower.getPuzzle('calendar-months');
 const retiredOrder = tower.correctOrder(retiredQuestion);
-const savedDay = (puzzleId, players = {}) => ({ puzzleId, order: tower.correctOrder(tower.getPuzzle(puzzleId)), players });
+const savedDay = (puzzleId, players = {}) => ({ puzzleId, contentKey: tower.questionKey(tower.getPuzzle(puzzleId)), order: tower.correctOrder(tower.getPuzzle(puzzleId)), players });
 const historical = savedDay('calendar-months', { alice: { order: retiredOrder, score: 600, correctPlacements: 6 } });
 const resetDb = {
   users: { alice: { displayName: 'Alice' }, bob: { displayName: 'Bob' } },
@@ -124,7 +164,9 @@ for (const [key, day] of Object.entries(resetDb.towerDays)) {
 }
 for (const [difficulty, id] of Object.entries(tower.CONTENT_REFRESH.showcase)) {
   const day = resetDb.towerDays[`${refreshDate}:${difficulty}`];
-  assert.equal(day.puzzleId, id); assert.equal(tower.getPuzzle(id).difficulty, difficulty);
+  const stillEligible = tower.puzzles.some(puzzle => puzzle.id === id && puzzle.difficulty === difficulty);
+  if (stillEligible) assert.equal(day.puzzleId, id);
+  assert.equal(tower.getPuzzle(day.puzzleId).difficulty, difficulty, 'Historical refreshes use the currently active difficulty calibration');
 }
 for (const id of ['calendar-months','atomic-numbers','polygon-sides','roman-numerals']) {
   assert.ok(Object.values(resetDb.towerDays).some(day => day.puzzleId === id), 'Removed selections stay reserved against future reuse');
@@ -188,9 +230,9 @@ async function liveScore(reader, score) {
 }
 
 async function main() {
-  const mediumPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'country-area');
+  const mediumPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'food-through-the-body');
   const easyPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'lion-king-story');
-  const hardPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'famous-ships-lengths');
+  const hardPuzzle = tower.puzzles.find(puzzle => puzzle.id === 'country-area');
   const fixtures = { easy: easyPuzzle, medium: mediumPuzzle, hard: hardPuzzle };
   const mediumPerfect = tower.correctOrder(mediumPuzzle);
   const mediumPartial = [...mediumPerfect]; [mediumPartial[0], mediumPartial[1]] = [mediumPartial[1], mediumPartial[0]];
@@ -215,7 +257,7 @@ async function main() {
     assert.match(html, /<dialog id="rulesDialog"/); assert.match(html, /difficultyPicker/);
     assert.match(html, /dailyScore/); assert.match(html, /nextLevelButton/);
     assert.match(await (await fetch(base)).text(), /Play Trivia Tower/);
-    for (const file of ['trivia-tower-puzzles.js', 'trivia-tower-extra-puzzles.js', 'trivia-tower-content.js', 'trivia-tower-refresh.js']) {
+    for (const file of ['trivia-tower-puzzles.js', 'trivia-tower-extra-puzzles.js', 'trivia-tower-content.js', 'trivia-tower-refresh.js', 'trivia-tower-approachable.js']) {
       assert.equal((await fetch(`${base}/${file}`)).status, 404, 'The answer bank stays server-side');
     }
     await request(base, '/api/tower/state?userId=missing', undefined, 404);
@@ -326,6 +368,55 @@ async function main() {
     saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
     assert.equal(saved.towerDays['2000-01-01'].players[alice.userId].score, 533);
     assert.equal(saved.towerDays['1999-01-01'].players[alice.userId].score, 600);
+
+    // Model an update arriving after players have submitted the old Medium
+    // and Hard. Their questions, orders, scores, and shared day stay locked.
+    const previouslyPublished = (questionId, difficulty) => {
+      const oldPuzzle = tower.getPuzzle(questionId);
+      const maxScore = tower.DIFFICULTIES[difficulty].maxScore;
+      const order = tower.correctOrder(oldPuzzle);
+      return { puzzleId: questionId, difficulty, maxScore, scoringVersion: tower.SCORING_VERSION, order,
+        players: { [alice.userId]: { order, score: maxScore, maxScore, correctPlacements: 6 } } };
+    };
+    saved.towerDays = {
+      [`${date}:easy`]: previouslyPublished(easyPuzzle.id, 'easy'),
+      [`${date}:medium`]: previouslyPublished('country-area', 'medium'),
+      [`${date}:hard`]: previouslyPublished('famous-ships-lengths', 'hard')
+    };
+    fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify(saved));
+    running = await launch(dataDir, port); base = running.base;
+    const oldMediumResult = await state(alice.userId, 'medium');
+    const oldHardResult = await state(alice.userId, 'hard');
+    assert.equal(oldMediumResult.puzzle.id, 'country-area');
+    assert.equal(oldMediumResult.result.score, 800);
+    assert.equal(oldHardResult.puzzle.id, 'famous-ships-lengths');
+    assert.equal(oldHardResult.result.score, 1200);
+    assert.equal(oldHardResult.totalScore, 2600);
+    assert.deepEqual(oldHardResult.result.submittedOrder, perfect);
+    assert.equal((await state(bob.userId, 'hard')).difficulty, 'easy');
+    await stop(running.child);
+    saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
+
+    // The same update can replace both unanswered levels. The displaced
+    // Medium question must be reserved before selecting the new Hard tower.
+    for (const day of Object.values(saved.towerDays)) day.players = {};
+    fs.writeFileSync(path.join(dataDir, 'game-data.json'), JSON.stringify(saved));
+    running = await launch(dataDir, port); base = running.base;
+    await state(alice.userId);
+    await stop(running.child);
+    saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'game-data.json'), 'utf8'));
+    assert.equal(tower.getPuzzle(saved.towerDays[`${date}:medium`].puzzleId).difficulty, 'medium');
+    assert.equal(tower.getPuzzle(saved.towerDays[`${date}:hard`].puzzleId).difficulty, 'hard');
+    assert.notEqual(saved.towerDays[`${date}:hard`].puzzleId, 'country-area');
+    for (const questionId of ['country-area', 'famous-ships-lengths']) {
+      assert.ok(Object.values(saved.towerDays).some(day => day.puzzleId === questionId && day.retiredReason === 'difficulty-review'),
+        'The server persists displaced question reservations');
+    }
+    for (const difficulty of Object.keys(tower.DIFFICULTIES)) {
+      const day = saved.towerDays[`${date}:${difficulty}`];
+      if (difficulty !== 'easy') assert.equal(day.contentKey, tower.questionKey(tower.getPuzzle(day.puzzleId)));
+    }
+
     saved.towerDays = {};
     for (const [index, puzzle] of tower.puzzles.filter(puzzle => puzzle.difficulty === 'easy').entries()) {
       saved.towerDays[`used-easy-${index}`] = published(puzzle);
@@ -374,7 +465,7 @@ async function main() {
       assert.equal(JSON.stringify(persistedReset.days), rebusBeforeReset);
       assert.equal(persistedReset.towerDays['2026-11-17'].players[alice.userId].score, 600);
     }
-    console.log('Passed: exactly 300 active questions with 175 fresh replacements, archived compatibility, nonrepeating selection, one-time date-scoped reset for all players, fresh showcase towers, earlier days and Rebus preserved, progression, accumulated scores, live standings, and restart persistence.');
+    console.log('Passed: 340 active questions with 120 approachable additions, unchanged Easy, former Medium promoted to Hard, archived compatibility, content-based nonrepeating selection, one-time date-scoped reset for all players, earlier days and Rebus preserved, progression, accumulated scores, live standings, and restart persistence.');
   } finally {
     if (running) await stop(running.child);
     const resolved = fs.realpathSync(dataDir);

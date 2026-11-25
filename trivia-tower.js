@@ -1,14 +1,33 @@
 const crypto = require('node:crypto');
 const originalBank = require('./trivia-tower-puzzles');
 const contentUpdate = require('./trivia-tower-refresh');
+const approachableQuestions = require('./trivia-tower-approachable');
 const retiredIds = new Set(contentUpdate.retiredIds);
 if (retiredIds.size !== contentUpdate.retiredIds.length ||
     contentUpdate.puzzles.length !== retiredIds.size ||
     contentUpdate.retiredIds.some(id => !originalBank.some(puzzle => puzzle.id === id))) {
   throw new Error('Trivia Tower replacements must match the retired questions one for one.');
 }
-const activeBank = [...originalBank.filter(puzzle => !retiredIds.has(puzzle.id)), ...contentUpdate.puzzles];
-const archivedBank = originalBank.filter(puzzle => retiredIds.has(puzzle.id));
+const previousBank = [...originalBank.filter(puzzle => !retiredIds.has(puzzle.id)), ...contentUpdate.puzzles];
+// Keep Easy intact. The former Medium bank is now Hard, with the same IDs so
+// previously shown questions cannot return under their new difficulty.
+const activeBank = [
+  ...previousBank.filter(puzzle => puzzle.difficulty === 'easy'),
+  ...approachableQuestions,
+  ...previousBank.filter(puzzle => puzzle.difficulty === 'medium').map(puzzle => ({ ...puzzle, difficulty: 'hard' }))
+];
+const archivedBank = [
+  ...originalBank.filter(puzzle => retiredIds.has(puzzle.id)),
+  ...previousBank.filter(puzzle => puzzle.difficulty === 'hard')
+];
+
+function questionKey(puzzle) {
+  // Ignore case, accents, punctuation, item order, and question wording. New
+  // IDs or edited directions must not let the same six-item question return.
+  const labels = puzzle.items.map(item => item.label.normalize('NFKD')
+    .replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')).sort();
+  return crypto.createHash('sha256').update(JSON.stringify(labels)).digest('hex');
+}
 
 const POINTS_PER_PLACEMENT = 100;
 const ITEM_COUNT = 6;
@@ -20,6 +39,7 @@ const DIFFICULTIES = {
 };
 const ids = new Set();
 const titles = new Set();
+const questionKeys = new Set();
 const allPuzzles = [...activeBank, ...archivedBank].map(puzzle => {
   if (!/^[a-z0-9-]+$/.test(puzzle.id) || ids.has(puzzle.id) || titles.has(puzzle.title)) {
     throw new Error(`Duplicate or invalid Trivia Tower question: ${puzzle.id}`);
@@ -35,8 +55,12 @@ const allPuzzles = [...activeBank, ...archivedBank].map(puzzle => {
       !puzzle.items.every(item => item.label && Number.isFinite(item.value) && item.valueLabel)) {
     throw new Error(`Trivia Tower question ${puzzle.id} needs six unambiguous items and a source.`);
   }
+  const contentKey = questionKey(puzzle);
+  if (questionKeys.has(contentKey)) throw new Error(`Duplicate Trivia Tower question content: ${puzzle.id}`);
+  questionKeys.add(contentKey);
   return {
     ...puzzle,
+    contentKey,
     items: puzzle.items.map(item => ({
       ...item,
       // IDs identify labels, never their correct position in the answer.
@@ -106,17 +130,32 @@ function ensureTowerDay(days, key, questions = puzzles, difficulty = 'medium') {
     // A difficulty correction may replace a tower nobody has submitted yet.
     // Reserve its published question forever, including abandoned drafts.
     // Once anyone has locked in, all players must keep that day's question.
-    if (!published || published.difficulty === difficulty || Object.keys(existing.players).length) return existing;
+    if (!existing.puzzleId || Object.keys(existing.players || {}).length || published?.difficulty === difficulty) return existing;
     days[`${storageKey}:retired:${existing.puzzleId}`] = { ...existing, retiredReason: 'difficulty-review' };
   }
   // Never refill this pool. Even after the bank is exhausted, published IDs
   // stay reserved forever. Adding new IDs makes fresh questions available.
   const used = new Set(Object.values(days).map(day => day.puzzleId).filter(Boolean));
-  const available = questions.filter(puzzle => puzzle.difficulty === difficulty && !used.has(puzzle.id));
+  const candidatesById = new Map(questions.map(puzzle => [puzzle.id, puzzle]));
+  const usedContent = new Set();
+  for (const day of Object.values(days)) {
+    if (day.contentKey) usedContent.add(day.contentKey);
+    // Older saves predate content keys. The archive keeps their identity
+    // available even after a question is retired or moves to another level.
+    const savedPuzzle = byId.get(day.puzzleId) || candidatesById.get(day.puzzleId);
+    if (savedPuzzle) {
+      const contentKey = questionKey(savedPuzzle);
+      usedContent.add(contentKey);
+      if (!day.contentKey) day.contentKey = contentKey;
+    }
+  }
+  const available = questions.filter(puzzle => puzzle.difficulty === difficulty &&
+    !used.has(puzzle.id) && !usedContent.has(questionKey(puzzle)));
   const puzzle = available.length ? available[crypto.randomInt(available.length)] : null;
   return days[storageKey] = {
     difficulty, maxScore: DIFFICULTIES[difficulty].maxScore, scoringVersion: SCORING_VERSION,
     puzzleId: puzzle?.id || null,
+    contentKey: puzzle ? questionKey(puzzle) : null,
     order: puzzle ? shuffledOrder(puzzle) : [],
     players: {}
   };
@@ -168,5 +207,5 @@ function revealResult(puzzle, player) {
 module.exports = {
   puzzles, retiredPuzzles, getPuzzle, CONTENT_REFRESH: contentUpdate.refresh, refreshDailyTowers,
   ITEM_COUNT, POINTS_PER_PLACEMENT, DIFFICULTIES, SCORING_VERSION, ensureTowerDay, scoreForPlacements,
-  correctOrder, publicTowerPuzzle, validOrder, scoreOrder, revealResult
+  correctOrder, publicTowerPuzzle, validOrder, scoreOrder, revealResult, questionKey
 };
